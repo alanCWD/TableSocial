@@ -1,0 +1,82 @@
+
+import React from 'react';
+
+interface LayoutProps {
+  children: React.ReactNode;
+  onNavigate: (page: 'explore' | 'how-it-works' | 'for-chefs') => void;
+  currentPage: string;
+}
+
+export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentPage }) => {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="bg-culinary text-white py-6 px-4 md:px-8 flex justify-between items-center sticky top-0 z-50">
+        <div className="flex items-center gap-2 cursor-pointer" onClick={() => onNavigate('explore')}>
+          <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center text-culinary">
+            <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+          </div>
+          <span className="text-2xl font-serif font-bold tracking-tight">TableSocial</span>
+        </div>
+        <nav className="hidden md:flex gap-8 text-sm uppercase tracking-widest font-medium">
+          <button 
+            onClick={() => onNavigate('explore')} 
+            className={`${currentPage === 'explore' ? 'text-accent' : 'text-gray-400'} hover:text-accent transition-colors`}
+          >
+            Explore
+          </button>
+          <button 
+            onClick={() => onNavigate('how-it-works')} 
+            className={`${currentPage === 'how-it-works' ? 'text-accent' : 'text-gray-400'} hover:text-accent transition-colors`}
+          >
+            How it works
+          </button>
+          <button 
+            onClick={() => onNavigate('for-chefs')} 
+            className={`${currentPage === 'for-chefs' ? 'text-accent' : 'text-gray-400'} hover:text-accent transition-colors`}
+          >
+            For Chefs
+          </button>
+        </nav>
+        <button className="bg-accent text-culinary px-5 py-2 rounded-full font-semibold text-sm hover:bg-opacity-90 transition-all">
+          Sign In
+        </button>
+      </header>
+      
+      <main className="flex-grow">
+        {children}
+      </main>
+
+      <footer className="bg-culinary text-gray-400 py-12 px-4 border-t border-gray-800">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8 text-center md:text-left">
+          <div>
+            <h3 className="text-white font-serif text-xl mb-4">TableSocial</h3>
+            <p className="text-sm leading-relaxed">
+              Redefining communal dining through curated private events, bridging the gap between extraordinary chefs and curious diners.
+            </p>
+          </div>
+          <div>
+            <h4 className="text-white font-medium mb-4">Quick Links</h4>
+            <ul className="space-y-2 text-sm">
+              <li><button onClick={() => onNavigate('explore')} className="hover:text-accent">Search Events</button></li>
+              <li><button onClick={() => onNavigate('for-chefs')} className="hover:text-accent">Partner with us</button></li>
+              <li><a href="#" className="hover:text-accent">Safety Guidelines</a></li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="text-white font-medium mb-4">Newsletter</h4>
+            <p className="text-sm mb-4">Get notified about exclusive pop-ups in your area.</p>
+            <div className="flex">
+              <input type="email" placeholder="Email address" className="bg-gray-900 border-none px-4 py-2 rounded-l w-full text-white text-sm" />
+              <button className="bg-accent text-culinary px-4 py-2 rounded-r font-bold text-sm">Join</button>
+            </div>
+          </div>
+        </div>
+        <div className="mt-12 text-center text-xs border-t border-gray-800 pt-8">
+          &copy; {new Date().getFullYear()} TableSocial Inc. All rights reserved.
+        </div>
+      </footer>
+    </div>
+  );
+};

@@ -1,0 +1,7 @@
+{
+  "name": "TableSocial",
+  "description": "A premium discovery platform for unique private dining events, communal chef pairings, and long-table dinners. Connect with chefs and fellow food enthusiasts in intimate, curated settings.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
