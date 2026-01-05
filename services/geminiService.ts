@@ -3,7 +3,13 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { DiningEvent, GroundingSource, Chef } from "../types";
 import { VERIFIED_CHEFS } from "../data/chefRegistry";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+const getAI = () => {
+  const apiKey = process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error("GEMINI_API_KEY is required. Please set it in your environment variables.");
+  }
+  return new GoogleGenAI({ apiKey });
+};
 
 /**
  * Normalizes a chef name for matching
@@ -27,7 +33,7 @@ export const fetchDiningEvents = async (location: string): Promise<{ events: Din
   - price, date, time, title, category, description, menuHighlights.`;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
       config: {
