@@ -1,13 +1,29 @@
 
 import React from 'react';
 
-interface LayoutProps {
-  children: React.ReactNode;
-  onNavigate: (page: 'explore' | 'how-it-works' | 'for-chefs') => void;
-  currentPage: string;
+interface User {
+  id: string;
+  name: string;
+  profileImage?: string;
 }
 
-export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentPage }) => {
+interface LayoutProps {
+  children: React.ReactNode;
+  onNavigate: (page: 'explore' | 'how-it-works' | 'for-chefs' | 'admin') => void;
+  currentPage: string;
+  user?: User | null;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
+}
+
+export const Layout: React.FC<LayoutProps> = ({ 
+  children, 
+  onNavigate, 
+  currentPage,
+  user,
+  onSignIn,
+  onSignOut,
+}) => {
   return (
     <div className="min-h-screen flex flex-col">
       <header className="bg-culinary text-white py-6 px-4 md:px-8 flex justify-between items-center sticky top-0 z-50">
@@ -39,9 +55,40 @@ export const Layout: React.FC<LayoutProps> = ({ children, onNavigate, currentPag
             For Chefs
           </button>
         </nav>
-        <button className="bg-accent text-culinary px-5 py-2 rounded-full font-semibold text-sm hover:bg-opacity-90 transition-all">
-          Sign In
-        </button>
+        <div className="flex items-center gap-4">
+          {user ? (
+            <>
+              <button
+                onClick={() => onNavigate('admin')}
+                className="text-gray-400 hover:text-accent text-sm uppercase tracking-widest font-medium transition-colors"
+              >
+                Admin
+              </button>
+              <div className="flex items-center gap-2">
+                {user.profileImage ? (
+                  <img src={user.profileImage} alt={user.name} className="w-8 h-8 rounded-full" />
+                ) : (
+                  <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-culinary font-bold text-sm">
+                    {user.name.charAt(0)}
+                  </div>
+                )}
+                <button
+                  onClick={onSignOut}
+                  className="text-gray-400 hover:text-white text-sm transition-colors"
+                >
+                  Sign Out
+                </button>
+              </div>
+            </>
+          ) : (
+            <button
+              onClick={onSignIn}
+              className="bg-accent text-culinary px-5 py-2 rounded-full font-semibold text-sm hover:bg-opacity-90 transition-all"
+            >
+              Sign In
+            </button>
+          )}
+        </div>
       </header>
       
       <main className="flex-grow">

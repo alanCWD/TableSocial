@@ -7,13 +7,21 @@ import { ProfileOverlay } from './components/ProfileOverlay';
 import { ChefCard } from './components/ChefCard';
 import { ForChefs } from './components/ForChefs';
 import { HowItWorks } from './components/HowItWorks';
+import { AdminDashboard } from './components/admin/AdminDashboard';
 import { DiningEvent, SearchState, Chef, Venue } from './types';
 import { fetchDiningEvents } from './services/geminiService';
 
-type Page = 'explore' | 'how-it-works' | 'for-chefs';
+type Page = 'explore' | 'how-it-works' | 'for-chefs' | 'admin';
+
+interface User {
+  id: string;
+  name: string;
+  profileImage?: string;
+}
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>('explore');
+  const [user, setUser] = useState<User | null>(null);
   const [search, setSearch] = useState<SearchState>({
     query: '',
     results: [],
@@ -26,6 +34,23 @@ const App: React.FC = () => {
   const [selectedChef, setSelectedChef] = useState<Chef | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [locationInput, setLocationInput] = useState('Victoria, BC');
+
+  useEffect(() => {
+    fetch('/api/auth/user')
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data) setUser(data);
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSignIn = () => {
+    window.location.href = '/api/login';
+  };
+
+  const handleSignOut = () => {
+    window.location.href = '/api/logout';
+  };
 
   const featuredChefs = useMemo(() => {
     const chefMap = new Map<string, Chef>();
@@ -69,6 +94,13 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     switch (currentPage) {
+      case 'admin':
+        return (
+          <AdminDashboard
+            onLogout={handleSignOut}
+            onBack={() => setCurrentPage('explore')}
+          />
+        );
       case 'how-it-works':
         return <HowItWorks />;
       case 'for-chefs':
@@ -208,8 +240,40 @@ const App: React.FC = () => {
     }
   };
 
+  if (currentPage === 'admin') {
+    if (!user) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-100">
+          <div className="bg-white p-8 rounded-xl shadow-lg text-center max-w-md">
+            <h2 className="text-2xl font-serif font-bold text-culinary mb-4">Admin Access</h2>
+            <p className="text-gray-600 mb-6">Please sign in to access the admin dashboard.</p>
+            <button
+              onClick={handleSignIn}
+              className="bg-accent text-culinary px-8 py-3 rounded-lg font-bold hover:bg-accent/90 transition-colors"
+            >
+              Sign In with Replit
+            </button>
+            <button
+              onClick={() => setCurrentPage('explore')}
+              className="block w-full mt-4 text-gray-500 hover:text-culinary transition-colors"
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return renderContent();
+  }
+
   return (
-    <Layout onNavigate={setCurrentPage} currentPage={currentPage}>
+    <Layout
+      onNavigate={setCurrentPage}
+      currentPage={currentPage}
+      user={user}
+      onSignIn={handleSignIn}
+      onSignOut={handleSignOut}
+    >
       {renderContent()}
 
       <EventModal 
