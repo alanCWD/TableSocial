@@ -311,9 +311,26 @@ export function registerApiRoutes(app: Express): void {
 
       try {
         const ai = new GoogleGenAI({ apiKey });
-        const prompt = `Find unique private dining events in ${location}. 
-          Focus on long table dinners, chef pairings, and pop-ups.
-          Return a JSON array of objects with: id, title, category, date, time, price, totalSeats, availableSeats, description, menuHighlights (array), imageUrl, chef object, venue object.`;
+        const prompt = `You are a culinary events researcher. Find REAL private dining events, chef's tables, pop-up dinners, and exclusive culinary experiences happening in or near ${location}.
+
+REQUIREMENTS:
+- Only include REAL events you can verify exist
+- Dates must be in format "Month Day, Year" (e.g., "January 15, 2026") - use upcoming dates within the next 3 months
+- Times must be in format like "7:00 PM"
+- Prices should be realistic (typically $75-$350 per person)
+- Include the chef's FULL NAME if known
+- Include the venue's FULL ADDRESS if available
+- Category must be one of: "Chef Pairing", "Long Table", "Pop-up", "Secret Location"
+
+For each event, provide:
+- title: The event name
+- description: 2-3 sentences about the experience
+- chef: Include name, bio (brief background), culinaryStyle (e.g., "French-Japanese fusion")
+- venue: Include name, fullAddress, description of the space
+- menuHighlights: 3-4 signature dishes or menu items
+- sourceUrl: URL where this event was found (if available)
+
+Return a JSON array of 3-5 events.`;
 
         const response = await ai.models.generateContent({
           model: "gemini-2.0-flash",
@@ -337,6 +354,7 @@ export function registerApiRoutes(app: Express): void {
                   description: { type: Type.STRING },
                   menuHighlights: { type: Type.ARRAY, items: { type: Type.STRING } },
                   imageUrl: { type: Type.STRING },
+                  sourceUrl: { type: Type.STRING },
                   chef: {
                     type: Type.OBJECT,
                     properties: {
@@ -411,24 +429,75 @@ export function registerApiRoutes(app: Express): void {
           });
         }
 
+        const cuisineImages = [
+          "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=800",
+          "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=800",
+          "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&q=80&w=800",
+          "https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&q=80&w=800",
+          "https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&q=80&w=800",
+        ];
+        const chefImages = [
+          "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&q=80&w=400",
+          "https://images.unsplash.com/photo-1581299894007-aaa50297cf16?auto=format&fit=crop&q=80&w=400",
+          "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=400",
+        ];
+        const venueImages = [
+          "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1200",
+          "https://images.unsplash.com/photo-1559329007-40df8a9345d8?auto=format&fit=crop&q=80&w=1200",
+          "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?auto=format&fit=crop&q=80&w=1200",
+        ];
+
         const enhancedAiEvents = aiEvents.map((ev: any, i: number) => ({
           ...ev,
-          id: ev.id || `ai-event-${i}`,
-          menuHighlights: ev.menuHighlights || [],
-          imageUrl: ev.imageUrl || `https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&q=80&w=800`,
+          id: ev.id || `ai-event-${Date.now()}-${i}`,
+          isAiGenerated: true,
+          date: ev.date || "Coming Soon",
+          time: ev.time || "7:00 PM",
+          price: ev.price || 150,
+          totalSeats: ev.totalSeats || 12,
+          availableSeats: ev.availableSeats || ev.totalSeats || 8,
+          category: ev.category || "Pop-up",
+          menuHighlights: ev.menuHighlights?.length ? ev.menuHighlights : ["Seasonal tasting menu", "Local ingredients", "Wine pairings"],
+          imageUrl: ev.imageUrl || cuisineImages[i % cuisineImages.length],
+          sourceUrl: ev.sourceUrl || null,
           chef: ev.chef ? {
             ...ev.chef,
-            id: ev.chef.id || `ai-chef-${i}`,
-            imageUrl: ev.chef.imageUrl || `https://images.unsplash.com/photo-1583394293214-28dea15ee548?auto=format&fit=crop&q=80&w=400`,
+            id: ev.chef.id || `ai-chef-${Date.now()}-${i}`,
+            name: ev.chef.name || "Guest Chef",
+            bio: ev.chef.bio || "A talented culinary artist bringing unique flavors to the table.",
+            culinaryStyle: ev.chef.culinaryStyle || "Contemporary",
+            imageUrl: ev.chef.imageUrl || chefImages[i % chefImages.length],
             socialLinks: ev.chef.socialLinks || {},
             verified: false,
-          } : null,
+            pastEventsCount: ev.chef.pastEventsCount || 0,
+          } : {
+            id: `ai-chef-${Date.now()}-${i}`,
+            name: "Guest Chef",
+            bio: "A talented culinary artist bringing unique flavors to the table.",
+            culinaryStyle: "Contemporary",
+            imageUrl: chefImages[i % chefImages.length],
+            socialLinks: {},
+            verified: false,
+            pastEventsCount: 0,
+          },
           venue: ev.venue ? {
             ...ev.venue,
-            id: ev.venue.id || `ai-venue-${i}`,
-            images: ev.venue.images?.length ? ev.venue.images : [`https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1200`],
-            atmosphere: ev.venue.atmosphere || [],
-          } : null,
+            id: ev.venue.id || `ai-venue-${Date.now()}-${i}`,
+            name: ev.venue.name || "Private Venue",
+            description: ev.venue.description || "An intimate setting for an unforgettable dining experience.",
+            fullAddress: ev.venue.fullAddress || location,
+            capacity: ev.venue.capacity || 20,
+            images: ev.venue.images?.length ? ev.venue.images : [venueImages[i % venueImages.length]],
+            atmosphere: ev.venue.atmosphere?.length ? ev.venue.atmosphere : ["Intimate", "Elegant"],
+          } : {
+            id: `ai-venue-${Date.now()}-${i}`,
+            name: "Private Venue",
+            description: "An intimate setting for an unforgettable dining experience.",
+            fullAddress: location,
+            capacity: 20,
+            images: [venueImages[i % venueImages.length]],
+            atmosphere: ["Intimate", "Elegant"],
+          },
         }));
 
         const combinedEvents = [...eventsWithRelations, ...enhancedAiEvents];

@@ -31,8 +31,8 @@ export interface Venue {
 export interface DiningEvent {
   id: string;
   title: string;
-  chef: Chef;
-  venue: Venue;
+  chef: Chef | null;
+  venue: Venue | null;
   date: string;
   time: string;
   price: number;
@@ -41,8 +41,9 @@ export interface DiningEvent {
   description: string;
   menuHighlights: string[];
   imageUrl: string;
-  category: 'Chef Pairing' | 'Long Table' | 'Pop-up' | 'Secret Location';
+  category: 'Chef Pairing' | 'Long Table' | 'Pop-up' | 'Secret Location' | string;
   sourceUrl?: string;
+  isAiGenerated?: boolean;
 }
 
 export interface GroundingSource {
