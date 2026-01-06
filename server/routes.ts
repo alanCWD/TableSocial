@@ -1,8 +1,8 @@
 import type { Express } from "express";
-import { db } from "./db";
-import { chefs, events, venues, aiIngestions } from "@shared/schema";
+import { db } from "./db.js";
+import { chefs, events, venues, aiIngestions } from "../shared/schema.js";
 import { eq, and, gte, desc } from "drizzle-orm";
-import { isAuthenticated } from "./replit_integrations/auth";
+import { isAuthenticated } from "./replit_integrations/auth/index.js";
 import { GoogleGenAI, Type } from "@google/genai";
 
 export function registerApiRoutes(app: Express): void {

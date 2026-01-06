@@ -3,9 +3,9 @@ import cors from "cors";
 import path from "path";
 import { fileURLToPath } from "url";
 import { createServer } from "http";
-import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth";
-import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
-import { registerApiRoutes } from "./routes";
+import { setupAuth, registerAuthRoutes } from "./replit_integrations/auth/index.js";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage/index.js";
+import { registerApiRoutes } from "./routes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -27,7 +27,7 @@ async function main() {
   });
 
   if (isProduction) {
-    const staticPath = path.resolve(__dirname, "../..");
+    const staticPath = path.resolve(__dirname, "..");
     app.use(express.static(staticPath));
     app.get("*", (req, res) => {
       res.sendFile(path.join(staticPath, "index.html"));
