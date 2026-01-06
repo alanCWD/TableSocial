@@ -277,23 +277,28 @@ export function registerApiRoutes(app: Express): void {
     try {
       const location = (req.query.location as string) || "Victoria, BC";
       
-      const dbEvents = await db
-        .select()
-        .from(events)
-        .where(eq(events.status, "published"))
-        .orderBy(desc(events.createdAt));
-      
-      const eventsWithRelations = await Promise.all(
-        dbEvents.map(async (event) => {
-          const chef = event.chefId
-            ? (await db.select().from(chefs).where(eq(chefs.id, event.chefId)))[0]
-            : null;
-          const venue = event.venueId
-            ? (await db.select().from(venues).where(eq(venues.id, event.venueId)))[0]
-            : null;
-          return { ...event, chef, venue };
-        })
-      );
+      let eventsWithRelations: any[] = [];
+      try {
+        const dbEvents = await db
+          .select()
+          .from(events)
+          .where(eq(events.status, "published"))
+          .orderBy(desc(events.createdAt));
+        
+        eventsWithRelations = await Promise.all(
+          dbEvents.map(async (event) => {
+            const chef = event.chefId
+              ? (await db.select().from(chefs).where(eq(chefs.id, event.chefId)))[0]
+              : null;
+            const venue = event.venueId
+              ? (await db.select().from(venues).where(eq(venues.id, event.venueId)))[0]
+              : null;
+            return { ...event, chef, venue };
+          })
+        );
+      } catch (dbError) {
+        console.error("Database error in discover:", dbError);
+      }
 
       if (eventsWithRelations.length >= 3) {
         return res.json({ events: eventsWithRelations, sources: [] });

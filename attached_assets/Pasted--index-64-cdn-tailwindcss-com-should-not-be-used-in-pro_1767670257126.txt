@@ -1,0 +1,30 @@
+(index):64 cdn.tailwindcss.com should not be used in production. To use Tailwind CSS in production, install it as a PostCSS plugin or use the Tailwind CLI: https://tailwindcss.com/docs/installation
+(anonymous) @ (index):64Understand this warning
+/api/auth/user:1  Failed to load resource: the server responded with a status of 401 ()Understand this error
+/api/discover?location=Victoria%2C%20BC:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+/api/discover?location=Victoria%2C%20BC:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+/api/discover?location=Victoria%2C%20BC:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+index-B7hEm9fW.js:49 Error fetching events: Error: Failed to discover events
+    at N0 (index-B7hEm9fW.js:49:110034)
+    at async ue (index-B7hEm9fW.js:49:111826)
+N0 @ index-B7hEm9fW.js:49Understand this error
+/api/discover?location=Victoria%2C%20BC:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+/api/discover?location=Victoria%2C%20BC:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+/api/discover?location=Victoria%2C%20BC:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+index-B7hEm9fW.js:49 Error fetching events: Error: Failed to discover events
+    at N0 (index-B7hEm9fW.js:49:110034)
+    at async ue (index-B7hEm9fW.js:49:111826)
+N0 @ index-B7hEm9fW.js:49Understand this error
+/api/discover?location=Vancouver:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+/api/discover?location=Vancouver:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+/api/discover?location=Vancouver:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+index-B7hEm9fW.js:49 Error fetching events: Error: Failed to discover events
+    at N0 (index-B7hEm9fW.js:49:110034)
+    at async ue (index-B7hEm9fW.js:49:111826)
+N0 @ index-B7hEm9fW.js:49Understand this error
+/api/discover?location=Seattle:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+/api/discover?location=Seattle:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+/api/discover?location=Seattle:1  Failed to load resource: the server responded with a status of 500 ()Understand this error
+index-B7hEm9fW.js:49 Error fetching events: Error: Failed to discover events
+    at N0 (index-B7hEm9fW.js:49:110034)
+    at async ue (index-B7hEm9fW.js:49:111826)
