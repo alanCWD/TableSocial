@@ -3,6 +3,7 @@ import { db } from "./db";
 import { chefs, events, venues, aiIngestions } from "@shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { isAuthenticated } from "./replit_integrations/auth";
+import { GoogleGenAI, Type } from "@google/genai";
 
 export function registerApiRoutes(app: Express): void {
   app.get("/api/events", async (req, res) => {
@@ -269,6 +270,147 @@ export function registerApiRoutes(app: Express): void {
     } catch (error) {
       console.error("Error deleting ingestion:", error);
       res.status(500).json({ error: "Failed to delete ingestion" });
+    }
+  });
+
+  app.get("/api/discover", async (req, res) => {
+    try {
+      const location = (req.query.location as string) || "Victoria, BC";
+      
+      const dbEvents = await db
+        .select()
+        .from(events)
+        .where(eq(events.status, "published"))
+        .orderBy(desc(events.createdAt));
+      
+      const eventsWithRelations = await Promise.all(
+        dbEvents.map(async (event) => {
+          const chef = event.chefId
+            ? (await db.select().from(chefs).where(eq(chefs.id, event.chefId)))[0]
+            : null;
+          const venue = event.venueId
+            ? (await db.select().from(venues).where(eq(venues.id, event.venueId)))[0]
+            : null;
+          return { ...event, chef, venue };
+        })
+      );
+
+      if (eventsWithRelations.length >= 3) {
+        return res.json({ events: eventsWithRelations, sources: [] });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.json({ events: eventsWithRelations, sources: [] });
+      }
+
+      try {
+        const ai = new GoogleGenAI({ apiKey });
+        const prompt = `Find unique private dining events in ${location}. 
+          Focus on long table dinners, chef pairings, and pop-ups.
+          Return a JSON array of objects with: id, title, category, date, time, price, totalSeats, availableSeats, description, menuHighlights (array), imageUrl, chef object, venue object.`;
+
+        const response = await ai.models.generateContent({
+          model: "gemini-2.0-flash",
+          contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  title: { type: Type.STRING },
+                  category: { type: Type.STRING },
+                  date: { type: Type.STRING },
+                  time: { type: Type.STRING },
+                  price: { type: Type.NUMBER },
+                  totalSeats: { type: Type.NUMBER },
+                  availableSeats: { type: Type.NUMBER },
+                  description: { type: Type.STRING },
+                  menuHighlights: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  imageUrl: { type: Type.STRING },
+                  chef: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      name: { type: Type.STRING },
+                      bio: { type: Type.STRING },
+                      culinaryStyle: { type: Type.STRING },
+                      imageUrl: { type: Type.STRING },
+                      pastEventsCount: { type: Type.NUMBER },
+                      socialLinks: {
+                        type: Type.OBJECT,
+                        properties: {
+                          instagram: { type: Type.STRING },
+                          website: { type: Type.STRING },
+                          twitter: { type: Type.STRING }
+                        }
+                      }
+                    },
+                    required: ["id", "name"]
+                  },
+                  venue: {
+                    type: Type.OBJECT,
+                    properties: {
+                      id: { type: Type.STRING },
+                      name: { type: Type.STRING },
+                      description: { type: Type.STRING },
+                      capacity: { type: Type.NUMBER },
+                      fullAddress: { type: Type.STRING },
+                      images: { type: Type.ARRAY, items: { type: Type.STRING } },
+                      atmosphere: { type: Type.ARRAY, items: { type: Type.STRING } }
+                    }
+                  }
+                }
+              }
+            }
+          },
+        });
+
+        const aiEvents = JSON.parse(response.text || "[]");
+        
+        const sources: { title: string; uri: string }[] = [];
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks) {
+          chunks.forEach((chunk: any) => {
+            if (chunk.web) {
+              sources.push({ title: chunk.web.title || "Reference", uri: chunk.web.uri });
+            }
+          });
+        }
+
+        const enhancedAiEvents = aiEvents.map((ev: any, i: number) => ({
+          ...ev,
+          id: ev.id || `ai-event-${i}`,
+          menuHighlights: ev.menuHighlights || [],
+          imageUrl: ev.imageUrl || `https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&q=80&w=800`,
+          chef: ev.chef ? {
+            ...ev.chef,
+            id: ev.chef.id || `ai-chef-${i}`,
+            imageUrl: ev.chef.imageUrl || `https://images.unsplash.com/photo-1583394293214-28dea15ee548?auto=format&fit=crop&q=80&w=400`,
+            socialLinks: ev.chef.socialLinks || {},
+            verified: false,
+          } : null,
+          venue: ev.venue ? {
+            ...ev.venue,
+            id: ev.venue.id || `ai-venue-${i}`,
+            images: ev.venue.images?.length ? ev.venue.images : [`https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1200`],
+            atmosphere: ev.venue.atmosphere || [],
+          } : null,
+        }));
+
+        const combinedEvents = [...eventsWithRelations, ...enhancedAiEvents];
+        res.json({ events: combinedEvents, sources: [...new Set(sources.map(s => s.uri))].map(uri => sources.find(s => s.uri === uri)!) });
+      } catch (aiError) {
+        console.error("AI discovery error:", aiError);
+        res.json({ events: eventsWithRelations, sources: [] });
+      }
+    } catch (error) {
+      console.error("Error in discovery:", error);
+      res.status(500).json({ error: "Failed to discover events" });
     }
   });
 }
