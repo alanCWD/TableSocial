@@ -1,8 +1,29 @@
 import { DiningEvent, GroundingSource } from "../types";
 
+const fetchWithRetry = async (url: string, retries = 6, delay = 2000): Promise<Response> => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const response = await fetch(url);
+      if (response.ok) return response;
+      if (response.status >= 500 && i < retries - 1) {
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      return response;
+    } catch (error) {
+      if (i < retries - 1) {
+        await new Promise(r => setTimeout(r, delay));
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error('Max retries exceeded');
+};
+
 export const fetchDiningEvents = async (location: string): Promise<{ events: DiningEvent[], sources: GroundingSource[] }> => {
   try {
-    const response = await fetch(`/api/discover?location=${encodeURIComponent(location)}`);
+    const response = await fetchWithRetry(`/api/discover?location=${encodeURIComponent(location)}`);
     
     if (!response.ok) {
       throw new Error('Failed to discover events');

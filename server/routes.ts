@@ -370,7 +370,31 @@ export function registerApiRoutes(app: Express): void {
           },
         });
 
-        const aiEvents = JSON.parse(response.text || "[]");
+        let rawText = response.text || "[]";
+        rawText = rawText.replace(/[\x00-\x1F\x7F]/g, ' ');
+        
+        let aiEvents: any[] = [];
+        try {
+          aiEvents = JSON.parse(rawText);
+        } catch (parseError) {
+          console.log("Initial JSON parse failed, attempting to fix...");
+          let fixedText = rawText
+            .replace(/,\s*]/g, ']')
+            .replace(/,\s*}/g, '}')
+            .replace(/([^\\])\\([^"\\\/bfnrtu])/g, '$1\\\\$2');
+          
+          const lastBracket = fixedText.lastIndexOf(']');
+          if (lastBracket > 0) {
+            fixedText = fixedText.substring(0, lastBracket + 1);
+          }
+          
+          try {
+            aiEvents = JSON.parse(fixedText);
+          } catch (secondError) {
+            console.log("JSON parsing failed after fixes, returning empty array");
+            aiEvents = [];
+          }
+        }
         
         const sources: { title: string; uri: string }[] = [];
         const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;

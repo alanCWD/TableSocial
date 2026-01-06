@@ -16,11 +16,15 @@ async function main() {
   registerObjectStorageRoutes(app);
   registerApiRoutes(app);
 
+  app.get("/health", (req, res) => {
+    res.status(200).json({ status: "ok" });
+  });
+
   const server = createServer(app);
   const port = 3001;
   
-  server.listen(port, "localhost", () => {
-    console.log(`Server running on http://localhost:${port}`);
+  server.listen(port, "127.0.0.1", () => {
+    console.log(`Server running on http://127.0.0.1:${port}`);
   });
 }
 

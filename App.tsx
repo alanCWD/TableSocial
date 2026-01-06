@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Layout } from './components/Layout';
 import { EventCard } from './components/EventCard';
 import { EventModal } from './components/EventModal';
@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const [selectedChef, setSelectedChef] = useState<Chef | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [locationInput, setLocationInput] = useState('Victoria, BC');
+  const searchCounterRef = useRef(0);
 
   useEffect(() => {
     fetch('/api/auth/user')
@@ -67,9 +68,11 @@ const App: React.FC = () => {
   }, []);
 
   const handleSearch = async (loc: string) => {
+    const currentSearch = ++searchCounterRef.current;
     setSearch(prev => ({ ...prev, isSearching: true, error: null, query: loc }));
     try {
       const data = await fetchDiningEvents(loc);
+      if (currentSearch !== searchCounterRef.current) return;
       setSearch(prev => ({
         ...prev,
         results: data.events,
@@ -77,6 +80,7 @@ const App: React.FC = () => {
         isSearching: false
       }));
     } catch (err) {
+      if (currentSearch !== searchCounterRef.current) return;
       setSearch(prev => ({
         ...prev,
         isSearching: false,

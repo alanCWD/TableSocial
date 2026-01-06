@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx server/index.ts & vite",
+    "dev": "tsx server/index.ts & sleep 5 && vite",
     "dev:server": "tsx server/index.ts",
     "dev:client": "vite",
     "build": "vite build",
@@ -24,6 +24,7 @@
     "@uppy/core": "^5.2.0",
     "@uppy/dashboard": "^5.1.0",
     "@uppy/react": "^5.1.1",
+    "concurrently": "^9.2.1",
     "connect-pg-simple": "^10.0.0",
     "cors": "^2.8.5",
     "drizzle-kit": "^0.31.8",
@@ -36,7 +37,8 @@
     "passport": "^0.7.0",
     "pg": "^8.16.3",
     "react": "^19.2.3",
-    "react-dom": "^19.2.3"
+    "react-dom": "^19.2.3",
+    "wait-on": "^9.0.3"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
