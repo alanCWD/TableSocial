@@ -29,7 +29,7 @@ async function main() {
   if (isProduction) {
     const staticPath = path.resolve(__dirname, "..");
     app.use(express.static(staticPath));
-    app.get("*", (req, res) => {
+    app.get("/{*path}", (req, res) => {
       res.sendFile(path.join(staticPath, "index.html"));
     });
   }
