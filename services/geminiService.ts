@@ -1,6 +1,6 @@
 import { DiningEvent, GroundingSource } from "../types";
 
-const fetchWithRetry = async (url: string, retries = 6, delay = 2000): Promise<Response> => {
+const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<Response> => {
   for (let i = 0; i < retries; i++) {
     try {
       const response = await fetch(url);

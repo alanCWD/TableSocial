@@ -73,19 +73,22 @@ const App: React.FC = () => {
     try {
       const data = await fetchDiningEvents(loc);
       if (currentSearch !== searchCounterRef.current) return;
-      setSearch(prev => ({
-        ...prev,
+      setSearch({
+        query: loc,
         results: data.events,
         sources: data.sources,
-        isSearching: false
-      }));
+        isSearching: false,
+        error: null
+      });
     } catch (err) {
       if (currentSearch !== searchCounterRef.current) return;
-      setSearch(prev => ({
-        ...prev,
+      setSearch({
+        query: loc,
+        results: [],
+        sources: [],
         isSearching: false,
         error: "Failed to curate experiences. Please try another city."
-      }));
+      });
     }
   };
 
@@ -147,8 +150,7 @@ const App: React.FC = () => {
                   </div>
                   <button 
                     type="submit"
-                    disabled={search.isSearching}
-                    className="bg-accent text-culinary font-bold px-12 py-5 rounded-2xl hover:bg-white transition-all shadow-xl disabled:opacity-50 tracking-widest uppercase text-xs"
+                    className="bg-accent text-culinary font-bold px-12 py-5 rounded-2xl hover:bg-white transition-all shadow-xl tracking-widest uppercase text-xs"
                   >
                     {search.isSearching ? 'Curating...' : 'Discover Tables'}
                   </button>
