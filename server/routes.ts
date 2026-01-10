@@ -311,96 +311,56 @@ export function registerApiRoutes(app: Express): void {
 
       try {
         const ai = new GoogleGenAI({ apiKey });
-        const prompt = `You are a culinary events researcher. Find REAL private dining events, chef's tables, pop-up dinners, and exclusive culinary experiences happening in or near ${location}.
+        const prompt = `Search the web for private dining events, chef's tables, pop-up dinners, and exclusive culinary experiences in ${location}.
 
-REQUIREMENTS:
-- Only include REAL events you can verify exist
-- Dates must be in format "Month Day, Year" (e.g., "January 15, 2026") - use upcoming dates within the next 3 months
-- Times must be in format like "7:00 PM"
-- Prices should be realistic (typically $75-$350 per person)
-- Include the chef's FULL NAME if known
-- Include the venue's FULL ADDRESS if available
-- Category must be one of: "Chef Pairing", "Long Table", "Pop-up", "Secret Location"
+Return a JSON array of 3-5 events. Each event object must have exactly these fields:
+{
+  "title": "Event name",
+  "description": "2-3 sentences about the experience",
+  "date": "Month Day, Year",
+  "time": "7:00 PM",
+  "price": 150,
+  "category": "Pop-up",
+  "sourceUrl": "https://example.com/event",
+  "chefName": "Chef's full name",
+  "chefBio": "Brief chef background",
+  "chefCulinaryStyle": "Cuisine specialty",
+  "chefWebsite": "https://chef-website.com",
+  "chefInstagram": "https://instagram.com/chef",
+  "venueName": "Venue name only",
+  "venueAddress": "123 Street, City, Province PostalCode",
+  "venueDescription": "Brief venue description",
+  "menuHighlights": ["Dish 1", "Dish 2", "Dish 3"]
+}
 
-For each event, provide:
-- title: The event name
-- description: 2-3 sentences about the experience
-- chef: Include name, bio (brief background), culinaryStyle (e.g., "French-Japanese fusion")
-- venue: Include name, fullAddress, description of the space
-- menuHighlights: 3-4 signature dishes or menu items
-- sourceUrl: URL where this event was found (if available)
-
-Return a JSON array of 3-5 events.`;
+Important:
+- Keep venueName short (just the venue name, not the full address)
+- Keep venueAddress as a single clean address string
+- Return valid JSON only, no markdown`;
 
         const response = await ai.models.generateContent({
           model: "gemini-2.0-flash",
           contents: prompt,
           config: {
             tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json",
-            responseSchema: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  id: { type: Type.STRING },
-                  title: { type: Type.STRING },
-                  category: { type: Type.STRING },
-                  date: { type: Type.STRING },
-                  time: { type: Type.STRING },
-                  price: { type: Type.NUMBER },
-                  totalSeats: { type: Type.NUMBER },
-                  availableSeats: { type: Type.NUMBER },
-                  description: { type: Type.STRING },
-                  menuHighlights: { type: Type.ARRAY, items: { type: Type.STRING } },
-                  imageUrl: { type: Type.STRING },
-                  sourceUrl: { type: Type.STRING },
-                  chef: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      name: { type: Type.STRING },
-                      bio: { type: Type.STRING },
-                      culinaryStyle: { type: Type.STRING },
-                      imageUrl: { type: Type.STRING },
-                      pastEventsCount: { type: Type.NUMBER },
-                      socialLinks: {
-                        type: Type.OBJECT,
-                        properties: {
-                          instagram: { type: Type.STRING },
-                          website: { type: Type.STRING },
-                          twitter: { type: Type.STRING }
-                        }
-                      }
-                    },
-                    required: ["id", "name"]
-                  },
-                  venue: {
-                    type: Type.OBJECT,
-                    properties: {
-                      id: { type: Type.STRING },
-                      name: { type: Type.STRING },
-                      description: { type: Type.STRING },
-                      capacity: { type: Type.NUMBER },
-                      fullAddress: { type: Type.STRING },
-                      images: { type: Type.ARRAY, items: { type: Type.STRING } },
-                      atmosphere: { type: Type.ARRAY, items: { type: Type.STRING } }
-                    }
-                  }
-                }
-              }
-            }
           },
         });
 
         let rawText = response.text || "[]";
+        console.log("Raw Gemini response text (first 2000 chars):", rawText.substring(0, 2000));
+        
+        const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          rawText = jsonMatch[1].trim();
+        }
+        
         rawText = rawText.replace(/[\x00-\x1F\x7F]/g, ' ');
         
         let aiEvents: any[] = [];
         try {
           aiEvents = JSON.parse(rawText);
         } catch (parseError) {
-          console.log("Initial JSON parse failed, attempting to fix...");
+          console.log("Initial JSON parse failed, attempting to fix...", parseError);
           let fixedText = rawText
             .replace(/,\s*]/g, ']')
             .replace(/,\s*}/g, '}')
@@ -429,74 +389,60 @@ Return a JSON array of 3-5 events.`;
           });
         }
 
-        const cuisineImages = [
-          "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=800",
-          "https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&q=80&w=800",
-          "https://images.unsplash.com/photo-1540189549336-e6e99c3679fe?auto=format&fit=crop&q=80&w=800",
-          "https://images.unsplash.com/photo-1467003909585-2f8a72700288?auto=format&fit=crop&q=80&w=800",
-          "https://images.unsplash.com/photo-1559339352-11d035aa65de?auto=format&fit=crop&q=80&w=800",
-        ];
-        const chefImages = [
-          "https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&q=80&w=400",
-          "https://images.unsplash.com/photo-1581299894007-aaa50297cf16?auto=format&fit=crop&q=80&w=400",
-          "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?auto=format&fit=crop&q=80&w=400",
-        ];
-        const venueImages = [
-          "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&q=80&w=1200",
-          "https://images.unsplash.com/photo-1559329007-40df8a9345d8?auto=format&fit=crop&q=80&w=1200",
-          "https://images.unsplash.com/photo-1466978913421-dad2ebd01d17?auto=format&fit=crop&q=80&w=1200",
-        ];
+        console.log("Raw Gemini AI events:", JSON.stringify(aiEvents, null, 2));
+        
+        const validAiEvents = aiEvents.filter((ev: any) => {
+          const hasTitle = ev.title && ev.title.trim() !== "";
+          const hasRealChef = ev.chefName && ev.chefName.trim() !== "" && ev.chefName.toLowerCase() !== "guest chef";
+          const hasRealVenue = ev.venueName && ev.venueName.trim() !== "";
+          const hasVenueAddress = ev.venueAddress && ev.venueAddress.trim() !== "" && ev.venueAddress.toLowerCase() !== "tbd";
+          const hasSourceUrl = ev.sourceUrl && ev.sourceUrl.trim() !== "";
+          
+          if (!hasTitle || !hasRealChef || !hasRealVenue || !hasVenueAddress || !hasSourceUrl) {
+            console.log(`Filtering out AI event: "${ev.title}" - missing: chef=${!hasRealChef}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}`);
+            return false;
+          }
+          return true;
+        });
+        
+        console.log(`AI events after validation: ${validAiEvents.length} of ${aiEvents.length} passed`);
 
-        const enhancedAiEvents = aiEvents.map((ev: any, i: number) => ({
-          ...ev,
-          id: ev.id || `ai-event-${Date.now()}-${i}`,
-          isAiGenerated: true,
+        const enhancedAiEvents = validAiEvents.map((ev: any, i: number) => ({
+          id: `ai-event-${Date.now()}-${i}`,
+          title: ev.title,
+          description: ev.description || "",
           date: ev.date || "Coming Soon",
           time: ev.time || "7:00 PM",
           price: ev.price || 150,
           totalSeats: ev.totalSeats || 12,
-          availableSeats: ev.availableSeats || ev.totalSeats || 8,
+          availableSeats: ev.availableSeats || 8,
           category: ev.category || "Pop-up",
-          menuHighlights: ev.menuHighlights?.length ? ev.menuHighlights : ["Seasonal tasting menu", "Local ingredients", "Wine pairings"],
-          imageUrl: ev.imageUrl || cuisineImages[i % cuisineImages.length],
+          menuHighlights: ev.menuHighlights || [],
+          imageUrl: ev.imageUrl || null,
           sourceUrl: ev.sourceUrl || null,
-          chef: ev.chef ? {
-            ...ev.chef,
-            id: ev.chef.id || `ai-chef-${Date.now()}-${i}`,
-            name: ev.chef.name || "Guest Chef",
-            bio: ev.chef.bio || "A talented culinary artist bringing unique flavors to the table.",
-            culinaryStyle: ev.chef.culinaryStyle || "Contemporary",
-            imageUrl: ev.chef.imageUrl || chefImages[i % chefImages.length],
-            socialLinks: ev.chef.socialLinks || {},
-            verified: false,
-            pastEventsCount: ev.chef.pastEventsCount || 0,
-          } : {
+          isAiGenerated: true,
+          chef: {
             id: `ai-chef-${Date.now()}-${i}`,
-            name: "Guest Chef",
-            bio: "A talented culinary artist bringing unique flavors to the table.",
-            culinaryStyle: "Contemporary",
-            imageUrl: chefImages[i % chefImages.length],
-            socialLinks: {},
+            name: ev.chefName,
+            bio: ev.chefBio || "",
+            culinaryStyle: ev.chefCulinaryStyle || "",
+            imageUrl: null,
             verified: false,
             pastEventsCount: 0,
+            socialLinks: {
+              instagram: ev.chefInstagram || null,
+              website: ev.chefWebsite || null,
+              twitter: ev.chefTwitter || null,
+            },
           },
-          venue: ev.venue ? {
-            ...ev.venue,
-            id: ev.venue.id || `ai-venue-${Date.now()}-${i}`,
-            name: ev.venue.name || "Private Venue",
-            description: ev.venue.description || "An intimate setting for an unforgettable dining experience.",
-            fullAddress: ev.venue.fullAddress || location,
-            capacity: ev.venue.capacity || 20,
-            images: ev.venue.images?.length ? ev.venue.images : [venueImages[i % venueImages.length]],
-            atmosphere: ev.venue.atmosphere?.length ? ev.venue.atmosphere : ["Intimate", "Elegant"],
-          } : {
+          venue: {
             id: `ai-venue-${Date.now()}-${i}`,
-            name: "Private Venue",
-            description: "An intimate setting for an unforgettable dining experience.",
-            fullAddress: location,
+            name: ev.venueName,
+            description: ev.venueDescription || "",
+            fullAddress: ev.venueAddress || "",
             capacity: 20,
-            images: [venueImages[i % venueImages.length]],
-            atmosphere: ["Intimate", "Elegant"],
+            images: [],
+            atmosphere: [],
           },
         }));
 
