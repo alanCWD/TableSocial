@@ -307,67 +307,8 @@ export function registerApiRoutes(app: Express): void {
         return res.json({ events: eventsWithRelations, sources: [] });
       }
 
-      const cachedEvents = await db
-        .select()
-        .from(cachedAiEvents)
-        .where(and(
-          eq(cachedAiEvents.location, normalizedLocation),
-          gte(cachedAiEvents.expiresAt, today)
-        ));
-
-      if (cachedEvents.length > 0) {
-        console.log(`Serving ${cachedEvents.length} cached AI events for ${location}`);
-        
-        const validCachedEvents = cachedEvents.filter(ev => {
-          if (ev.date && ev.date.toLowerCase() !== "ongoing" && ev.date.toLowerCase() !== "coming soon") {
-            try {
-              const eventDate = new Date(ev.date);
-              if (!isNaN(eventDate.getTime())) {
-                return eventDate >= today;
-              }
-            } catch (e) {}
-          }
-          return true;
-        });
-        
-        const enhancedCachedEvents = validCachedEvents.map((ev, i) => ({
-          id: ev.id,
-          title: ev.title,
-          description: ev.description || "",
-          date: ev.date || "Coming Soon",
-          time: ev.time || "7:00 PM",
-          price: ev.price || 150,
-          totalSeats: 12,
-          availableSeats: 8,
-          category: ev.category || "Private Dining",
-          menuHighlights: ev.menuHighlights || [],
-          imageUrl: null,
-          sourceUrl: ev.sourceUrl || null,
-          isAiGenerated: true,
-          chef: {
-            id: `cached-chef-${ev.id}`,
-            name: ev.hostName || "Featured Host",
-            bio: ev.hostBio || "",
-            culinaryStyle: ev.hostStyle || "",
-            imageUrl: null,
-            verified: false,
-            pastEventsCount: 0,
-            socialLinks: { instagram: null, website: null, twitter: null },
-          },
-          venue: {
-            id: `cached-venue-${ev.id}`,
-            name: ev.venueName || "Private Venue",
-            description: ev.venueDescription || "",
-            fullAddress: ev.venueAddress || "",
-            capacity: 20,
-            images: [],
-            atmosphere: [],
-          },
-        }));
-
-        const combinedEvents = [...eventsWithRelations, ...enhancedCachedEvents];
-        return res.json({ events: combinedEvents, sources: [] });
-      }
+      // CACHE DISABLED: Always query Gemini fresh to accumulate events
+      // Events are still saved to cached_ai_events table for persistence
 
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -381,23 +322,26 @@ export function registerApiRoutes(app: Express): void {
         const prompt = `Today's date is ${currentDateStr}. Search the web for UPCOMING intimate dining experiences in ${location}.
 
 WHAT TO FIND (prioritize these types):
-- Whisky dinners and wine pairing dinners (e.g., Highland Park Whisky Dinner, InchDairnie Whisky Dinner)
-- Chef's tables and private dining rooms
-- Pop-up dinners by guest chefs
-- Exclusive tasting menus with limited seating (under 40 guests)
-- Multi-course culinary experiences at hotels and restaurants
+- Whisky dinners with named ambassadors (e.g., "InchDairnie Whisky Dinner with Scott Fraser", "Nikka Whisky Tasting with Emiko Kaji")
+- Wine pairing dinners with named sommeliers
+- Chef's tables hosted by specific named chefs (e.g., "Chef Landon Crawford's Tasting Menu")
+- Pop-up dinners by named guest chefs
+- Multi-course culinary experiences at hotels with named chefs
 
 WHAT TO EXCLUDE:
-- Large food festivals with hundreds of attendees
-- General restaurant promotions
+- Large food festivals (over 50 attendees)
+- Events with only generic hosts like "Guest Chefs" or "Various Restaurants"
+- General restaurant promotions or "Dine Around" city-wide events
 - Food tours or walking tours
 - Events without specific dates
 
 CRITICAL REQUIREMENTS:
 - Only events happening AFTER ${currentDateStr}
-- Must have a specific date (not just "ongoing" or seasonal)
-- Must have a real venue with address
-- Must have verifiable source URL
+- Must have a SPECIFIC DATE (e.g., "January 16, 2026" - NOT "ongoing", "seasonal", or date ranges)
+- Must have a NAMED HOST - a real person's first and last name (e.g., "Emiko Kaji", "Landon Crawford", "Scott Fraser")
+- Do NOT use generic host names like "Guest Chefs", "Various", "Participating Restaurants", "Feature Bartenders"
+- Must have a real venue with full street address
+- Must have a verifiable source URL
 
 Return a JSON array of 3-5 FUTURE events. Each event object must have these fields:
 {
@@ -408,7 +352,7 @@ Return a JSON array of 3-5 FUTURE events. Each event object must have these fiel
   "price": 150,
   "category": "Whisky Dinner",
   "sourceUrl": "https://example.com/event",
-  "hostName": "Name of chef, sommelier, or host leading the experience",
+  "hostName": "First Last (real person's name, NOT 'Guest Chefs')",
   "hostBio": "Brief background on the host",
   "hostStyle": "Culinary or beverage specialty",
   "venueName": "Venue name only",
@@ -418,7 +362,7 @@ Return a JSON array of 3-5 FUTURE events. Each event object must have these fiel
 }
 
 Important:
-- hostName can be a chef, sommelier, whisky ambassador, or venue name if host-led
+- hostName MUST be a real person's name (first + last name) - never generic terms
 - Return valid JSON only, no markdown`;
 
         const response = await ai.models.generateContent({
@@ -476,9 +420,19 @@ Important:
         
         const validAiEvents = aiEvents.filter((ev: any) => {
           const hasTitle = ev.title && ev.title.trim() !== "";
-          const hasHost = (ev.hostName && ev.hostName.trim() !== "") || 
-                          (ev.chefName && ev.chefName.trim() !== "") ||
-                          (ev.venueName && ev.venueName.trim() !== "");
+          
+          const genericHostPatterns = [
+            "guest chef", "guest chefs", "various", "participating", 
+            "feature bartender", "featured bartender", "feature chef", 
+            "tbd", "to be announced", "multiple", "assorted",
+            "local chef", "local chefs", "house chef", "executive chef team"
+          ];
+          const hostName = (ev.hostName || ev.chefName || "").toLowerCase().trim();
+          const isGenericHost = genericHostPatterns.some(pattern => hostName.includes(pattern)) ||
+                                hostName === "" ||
+                                !hostName.includes(" ");
+          const hasNamedHost = !isGenericHost && hostName.length > 3;
+          
           const hasRealVenue = ev.venueName && ev.venueName.trim() !== "" && 
                                ev.venueName.toLowerCase() !== "various" &&
                                ev.venueName.toLowerCase() !== "various restaurants";
@@ -511,8 +465,8 @@ Important:
             } catch (e) {}
           }
           
-          if (!hasTitle || !hasHost || !hasRealVenue || !hasVenueAddress || !hasSourceUrl || !hasSpecificDate) {
-            console.log(`Filtering out AI event: "${ev.title}" - missing: host=${!hasHost}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}, date=${!hasSpecificDate}`);
+          if (!hasTitle || !hasNamedHost || !hasRealVenue || !hasVenueAddress || !hasSourceUrl || !hasSpecificDate) {
+            console.log(`Filtering out AI event: "${ev.title}" - missing: namedHost=${!hasNamedHost}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}, date=${!hasSpecificDate}`);
             return false;
           }
           return isFutureEvent;
