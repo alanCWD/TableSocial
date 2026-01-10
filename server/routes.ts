@@ -311,9 +311,19 @@ export function registerApiRoutes(app: Express): void {
 
       try {
         const ai = new GoogleGenAI({ apiKey });
-        const prompt = `Search the web for private dining events, chef's tables, pop-up dinners, and exclusive culinary experiences in ${location}.
+        const today = new Date();
+        const currentDateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+        
+        const prompt = `Today's date is ${currentDateStr}. Search the web for UPCOMING private dining events, chef's tables, pop-up dinners, whisky dinners, and exclusive culinary experiences in ${location}.
 
-Return a JSON array of 3-5 events. Each event object must have exactly these fields:
+CRITICAL: Only include events happening AFTER ${currentDateStr}. Do NOT include any past events.
+
+IMPORTANT SOURCES TO CHECK:
+- hotelgrandpacific.com/dining-events/ (Highland Park Whisky Dinner, InchDairnie Whisky Dinner, and other dining events)
+- Local restaurant websites and event listings
+- Eventbrite and similar event platforms
+
+Return a JSON array of 3-5 FUTURE events only. Each event object must have exactly these fields:
 {
   "title": "Event name",
   "description": "2-3 sentences about the experience",
@@ -334,6 +344,7 @@ Return a JSON array of 3-5 events. Each event object must have exactly these fie
 }
 
 Important:
+- ONLY include events with dates AFTER ${currentDateStr}
 - Keep venueName short (just the venue name, not the full address)
 - Keep venueAddress as a single clean address string
 - Return valid JSON only, no markdown`;
@@ -398,11 +409,26 @@ Important:
           const hasVenueAddress = ev.venueAddress && ev.venueAddress.trim() !== "" && ev.venueAddress.toLowerCase() !== "tbd";
           const hasSourceUrl = ev.sourceUrl && ev.sourceUrl.trim() !== "";
           
+          let isFutureEvent = true;
+          if (ev.date && ev.date.toLowerCase() !== "ongoing" && ev.date.toLowerCase() !== "coming soon") {
+            try {
+              const eventDate = new Date(ev.date);
+              if (!isNaN(eventDate.getTime())) {
+                isFutureEvent = eventDate >= today;
+                if (!isFutureEvent) {
+                  console.log(`Filtering out past event: "${ev.title}" - date: ${ev.date}`);
+                }
+              }
+            } catch (e) {
+              // If date parsing fails, keep the event
+            }
+          }
+          
           if (!hasTitle || !hasRealChef || !hasRealVenue || !hasVenueAddress || !hasSourceUrl) {
             console.log(`Filtering out AI event: "${ev.title}" - missing: chef=${!hasRealChef}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}`);
             return false;
           }
-          return true;
+          return isFutureEvent;
         });
         
         console.log(`AI events after validation: ${validAiEvents.length} of ${aiEvents.length} passed`);
