@@ -319,12 +319,14 @@ export function registerApiRoutes(app: Express): void {
         const ai = new GoogleGenAI({ apiKey });
         const currentDateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         
+        const searchCity = location.split(",")[0].trim();
+        
         const prompt = `Today's date is ${currentDateStr}. Search the web for UPCOMING intimate dining experiences in ${location}.
 
 WHAT TO FIND (prioritize these types):
-- Whisky dinners with named ambassadors (e.g., "InchDairnie Whisky Dinner with Scott Fraser", "Nikka Whisky Tasting with Emiko Kaji")
+- Whisky dinners with named ambassadors (e.g., "InchDairnie Whisky Dinner")
 - Wine pairing dinners with named sommeliers
-- Chef's tables hosted by specific named chefs (e.g., "Chef Landon Crawford's Tasting Menu")
+- Chef's tables hosted by specific named chefs
 - Pop-up dinners by named guest chefs
 - Multi-course culinary experiences at hotels with named chefs
 
@@ -334,14 +336,21 @@ WHAT TO EXCLUDE:
 - General restaurant promotions or "Dine Around" city-wide events
 - Food tours or walking tours
 - Events without specific dates
+- Events NOT in ${searchCity} or its immediate area
 
 CRITICAL REQUIREMENTS:
 - Only events happening AFTER ${currentDateStr}
 - Must have a SPECIFIC DATE (e.g., "January 16, 2026" - NOT "ongoing", "seasonal", or date ranges)
-- Must have a NAMED HOST - a real person's first and last name (e.g., "Emiko Kaji", "Landon Crawford", "Scott Fraser")
-- Do NOT use generic host names like "Guest Chefs", "Various", "Participating Restaurants", "Feature Bartenders"
+- Must be located IN or NEAR ${searchCity} (not in other cities)
 - Must have a real venue with full street address
 - Must have a verifiable source URL
+
+IMPORTANT - DISTINGUISH BETWEEN CHEF AND HOST:
+- "chefName" = the person COOKING the food (e.g., "Landon Crawford" who prepares the menu)
+- "hostName" = the person PRESENTING/HOSTING (e.g., "Adam Ellesmere" whisky ambassador, "Scott Fraser" distillery rep)
+- For whisky dinners: the chef cooks, the whisky ambassador hosts
+- For wine dinners: the chef cooks, the sommelier hosts
+- If same person does both, put their name in both fields
 
 Return a JSON array of 3-5 FUTURE events. Each event object must have these fields:
 {
@@ -352,17 +361,23 @@ Return a JSON array of 3-5 FUTURE events. Each event object must have these fiel
   "price": 150,
   "category": "Whisky Dinner",
   "sourceUrl": "https://example.com/event",
-  "hostName": "First Last (real person's name, NOT 'Guest Chefs')",
-  "hostBio": "Brief background on the host",
-  "hostStyle": "Culinary or beverage specialty",
+  "chefName": "First Last - the person COOKING (required)",
+  "chefBio": "Brief background on the chef",
+  "chefStyle": "Culinary specialty",
+  "hostName": "First Last - the person PRESENTING (whisky ambassador, sommelier, etc.) or null if same as chef",
+  "hostBio": "Brief background on the host/presenter",
+  "hostRole": "Whisky Ambassador, Sommelier, Winemaker, etc.",
   "venueName": "Venue name only",
   "venueAddress": "123 Street, City, Province PostalCode",
+  "venueCity": "${searchCity}",
   "venueDescription": "Brief venue description",
   "menuHighlights": ["Course 1", "Course 2", "Pairing notes"]
 }
 
 Important:
-- hostName MUST be a real person's name (first + last name) - never generic terms
+- chefName MUST be a real chef's name (first + last name) who is COOKING
+- hostName is the presenter/ambassador (can be null if chef is also the host)
+- venueCity MUST be "${searchCity}" or very nearby - exclude events in other cities
 - Return valid JSON only, no markdown`;
 
         const response = await ai.models.generateContent({
@@ -421,17 +436,18 @@ Important:
         const validAiEvents = aiEvents.filter((ev: any) => {
           const hasTitle = ev.title && ev.title.trim() !== "";
           
-          const genericHostPatterns = [
+          const genericNamePatterns = [
             "guest chef", "guest chefs", "various", "participating", 
             "feature bartender", "featured bartender", "feature chef", 
             "tbd", "to be announced", "multiple", "assorted",
             "local chef", "local chefs", "house chef", "executive chef team"
           ];
-          const hostName = (ev.hostName || ev.chefName || "").toLowerCase().trim();
-          const isGenericHost = genericHostPatterns.some(pattern => hostName.includes(pattern)) ||
-                                hostName === "" ||
-                                !hostName.includes(" ");
-          const hasNamedHost = !isGenericHost && hostName.length > 3;
+          
+          const chefName = (ev.chefName || "").toLowerCase().trim();
+          const isGenericChef = genericNamePatterns.some(pattern => chefName.includes(pattern)) ||
+                                chefName === "" ||
+                                !chefName.includes(" ");
+          const hasNamedChef = !isGenericChef && chefName.length > 3;
           
           const hasRealVenue = ev.venueName && ev.venueName.trim() !== "" && 
                                ev.venueName.toLowerCase() !== "various" &&
@@ -441,6 +457,11 @@ Important:
                                   ev.venueAddress.toLowerCase() !== "various locations" &&
                                   ev.venueAddress.toLowerCase() !== "various addresses";
           const hasSourceUrl = ev.sourceUrl && ev.sourceUrl.trim() !== "";
+          
+          const venueCity = (ev.venueCity || "").toLowerCase().trim();
+          const addressLower = (ev.venueAddress || "").toLowerCase();
+          const isInSearchCity = venueCity.includes(searchCity.toLowerCase()) ||
+                                 addressLower.includes(searchCity.toLowerCase());
           
           const invalidDatePatterns = [
             "varies", "various", "ongoing", "seasonal", "tbd", "to be announced",
@@ -465,8 +486,8 @@ Important:
             } catch (e) {}
           }
           
-          if (!hasTitle || !hasNamedHost || !hasRealVenue || !hasVenueAddress || !hasSourceUrl || !hasSpecificDate) {
-            console.log(`Filtering out AI event: "${ev.title}" - missing: namedHost=${!hasNamedHost}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}, date=${!hasSpecificDate}`);
+          if (!hasTitle || !hasNamedChef || !hasRealVenue || !hasVenueAddress || !hasSourceUrl || !hasSpecificDate || !isInSearchCity) {
+            console.log(`Filtering out AI event: "${ev.title}" - missing: chef=${!hasNamedChef}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}, date=${!hasSpecificDate}, location=${!isInSearchCity}`);
             return false;
           }
           return isFutureEvent;
@@ -487,11 +508,15 @@ Important:
               price: typeof ev.price === 'number' ? Math.round(ev.price) : null,
               category: ev.category || null,
               sourceUrl: ev.sourceUrl || null,
-              hostName: ev.hostName || ev.chefName || null,
-              hostBio: ev.hostBio || ev.chefBio || null,
-              hostStyle: ev.hostStyle || ev.chefCulinaryStyle || null,
+              chefName: ev.chefName || null,
+              chefBio: ev.chefBio || null,
+              chefStyle: ev.chefStyle || null,
+              hostName: ev.hostName || null,
+              hostBio: ev.hostBio || null,
+              hostRole: ev.hostRole || null,
               venueName: ev.venueName || null,
               venueAddress: ev.venueAddress || null,
+              venueCity: ev.venueCity || null,
               venueDescription: ev.venueDescription || null,
               menuHighlights: ev.menuHighlights || [],
               expiresAt,
@@ -521,18 +546,24 @@ Important:
           isAiGenerated: true,
           chef: {
             id: `ai-chef-${Date.now()}-${i}`,
-            name: ev.hostName || ev.chefName || "Featured Host",
-            bio: ev.hostBio || ev.chefBio || "",
-            culinaryStyle: ev.hostStyle || ev.chefCulinaryStyle || "",
+            name: ev.chefName || "Featured Chef",
+            bio: ev.chefBio || "",
+            culinaryStyle: ev.chefStyle || "",
             imageUrl: null,
             verified: false,
             pastEventsCount: 0,
             socialLinks: {
-              instagram: ev.chefInstagram || null,
-              website: ev.chefWebsite || null,
-              twitter: ev.chefTwitter || null,
+              instagram: null,
+              website: null,
+              twitter: null,
             },
           },
+          host: ev.hostName ? {
+            id: `ai-host-${Date.now()}-${i}`,
+            name: ev.hostName,
+            bio: ev.hostBio || "",
+            role: ev.hostRole || "Host",
+          } : null,
           venue: {
             id: `ai-venue-${Date.now()}-${i}`,
             name: ev.venueName,
@@ -545,6 +576,19 @@ Important:
         }));
 
         const combinedEvents = [...eventsWithRelations, ...enhancedAiEvents];
+        
+        combinedEvents.sort((a, b) => {
+          try {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            if (isNaN(dateA.getTime())) return 1;
+            if (isNaN(dateB.getTime())) return -1;
+            return dateA.getTime() - dateB.getTime();
+          } catch {
+            return 0;
+          }
+        });
+        
         res.json({ events: combinedEvents, sources: [...new Set(sources.map(s => s.uri))].map(uri => sources.find(s => s.uri === uri)!) });
       } catch (aiError) {
         console.error("AI discovery error:", aiError);
