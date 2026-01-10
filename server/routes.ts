@@ -5,6 +5,272 @@ import { eq, and, gte, desc, lt } from "drizzle-orm";
 import { isAuthenticated } from "./replit_integrations/auth/index.js";
 import { GoogleGenAI, Type } from "@google/genai";
 
+// Known closed venues that should be rejected (exact match on full name or word boundaries)
+const CLOSED_VENUES = [
+  "olo restaurant",
+  "olo victoria",
+];
+
+// Known brand/product names that identify events (whisky brands, chef names, etc.)
+const BRAND_TOKENS = [
+  "highland park", "inchdairnie", "bearface", "macaloney", "macaloneys",
+  "ito", "castro", "small gods", "galentine", "galentines",
+  "noble brews", "wilderness series"
+];
+
+// Invalid titles that are likely parsing errors or website names
+const INVALID_TITLE_PATTERNS = [
+  /^[a-z0-9]+\.(com|ca|org|net|io)$/i,  // Just a domain name
+  /^eventbrite/i,
+  /^showpass/i,
+  /^wanderlog/i,
+  /^facebook/i,
+  /^instagram/i,
+  /^google/i,
+  /^https?:\/\//i,  // URL as title
+  /^www\./i,
+];
+
+// Words to remove when extracting signature tokens
+const GENERIC_WORDS = [
+  "dinner", "dinners", "pairing", "pairings", "whisky", "whiskey", "wine", "wines",
+  "course", "courses", "experience", "experiences", "night", "evening",
+  "long", "table", "tables", "sip", "dine", "dining", "toast", "celebration",
+  "at", "the", "a", "an", "with", "for", "of", "&", "and", "x", "vs"
+];
+
+// Venue name tokens to remove from title comparisons
+const VENUE_TOKENS = [
+  "fathom", "vista", "hob", "hotel grand pacific", "fairmont", "empress",
+  "chateau victoria", "restaurant", "fine foods"
+];
+
+/**
+ * Extract signature tokens from a title for fuzzy matching
+ * Returns: { brandToken, venueToken, normalizedCore }
+ */
+function extractEventSignature(title: string): { brandToken: string | null, venueToken: string | null, normalizedCore: string } {
+  let normalized = title.toLowerCase()
+    .replace(/&amp;/g, '&')
+    .replace(/['']s/g, 's')  // "Macaloney's" -> "macaloneys"
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Normalize whisky/whiskey
+  normalized = normalized.replace(/whiskey/g, 'whisky');
+  
+  // Find brand token
+  let brandToken: string | null = null;
+  for (const brand of BRAND_TOKENS) {
+    if (normalized.includes(brand)) {
+      brandToken = brand;
+      break;
+    }
+  }
+  
+  // Find venue token
+  let venueToken: string | null = null;
+  for (const venue of VENUE_TOKENS) {
+    if (normalized.includes(venue)) {
+      venueToken = venue;
+      break;
+    }
+  }
+  
+  // Remove generic words and venue tokens to get the core signature
+  let words = normalized.split(' ');
+  words = words.filter(w => 
+    !GENERIC_WORDS.includes(w) && 
+    !VENUE_TOKENS.includes(w) &&
+    w.length > 1
+  );
+  
+  const normalizedCore = words.join(' ');
+  
+  return { brandToken, venueToken, normalizedCore };
+}
+
+/**
+ * Parse a date string and return a Date object
+ */
+function parseEventDate(dateStr: string): Date | null {
+  if (!dateStr) return null;
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) return d;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if two dates are within N days of each other
+ */
+function areDatesClose(date1: Date | null, date2: Date | null, maxDaysDiff: number = 1): boolean {
+  if (!date1 || !date2) return false;
+  const diffMs = Math.abs(date1.getTime() - date2.getTime());
+  const diffDays = diffMs / (1000 * 60 * 60 * 24);
+  return diffDays <= maxDaysDiff;
+}
+
+/**
+ * Score a source URL for authoritativeness (higher = more trusted)
+ */
+function scoreSourceUrl(url: string | null): number {
+  if (!url) return 0;
+  const urlLower = url.toLowerCase();
+  
+  // Ticketing platforms are most authoritative
+  if (urlLower.includes('showpass.com')) return 100;
+  if (urlLower.includes('eventbrite')) return 90;
+  if (urlLower.includes('do250.com')) return 85;
+  
+  // Official venue/business sites
+  if (urlLower.includes('hobfinefoods')) return 80;
+  if (urlLower.includes('hotelgrandpacific')) return 80;
+  if (urlLower.includes('fairmont')) return 80;
+  
+  // Tourism/directory sites
+  if (urlLower.includes('tourismvictoria')) return 50;
+  
+  // Google grounding redirect URLs are least reliable
+  if (urlLower.includes('vertexaisearch.cloud.google.com')) return 10;
+  
+  return 30;
+}
+
+/**
+ * Check if venue is known to be closed
+ * Uses word boundary matching to avoid false positives (e.g., "Apollo" matching "olo")
+ */
+function isClosedVenue(venueName: string | null): boolean {
+  if (!venueName) return false;
+  const normalized = venueName.toLowerCase().trim();
+  
+  // Check for exact match or word-boundary match
+  return CLOSED_VENUES.some(closed => {
+    // Exact match
+    if (normalized === closed) return true;
+    
+    // Word boundary match: closed venue name appears as complete word(s)
+    const pattern = new RegExp(`\\b${closed.replace(/\s+/g, '\\s+')}\\b`, 'i');
+    return pattern.test(normalized);
+  });
+}
+
+/**
+ * Check if title is invalid (likely a parsing error)
+ */
+function isInvalidTitle(title: string | null): boolean {
+  if (!title || title.trim().length < 5) return true;
+  const trimmed = title.trim();
+  return INVALID_TITLE_PATTERNS.some(pattern => pattern.test(trimmed));
+}
+
+/**
+ * Deduplicate and merge events with similar signatures
+ * Returns unique events with best data from merged duplicates
+ */
+function deduplicateEvents(eventList: any[]): any[] {
+  // First, filter out invalid titles
+  const validEvents = eventList.filter(ev => !isInvalidTitle(ev.title));
+  
+  // Group events by brand first (to catch date variations within same brand)
+  const brandGroups = new Map<string, any[]>();
+  const unbrandedEvents: any[] = [];
+  
+  for (const ev of validEvents) {
+    const signature = extractEventSignature(ev.title);
+    const date = parseEventDate(ev.date);
+    const eventWithMeta = { ...ev, _signature: signature, _date: date };
+    
+    if (signature.brandToken) {
+      const brandKey = signature.brandToken;
+      if (!brandGroups.has(brandKey)) {
+        brandGroups.set(brandKey, []);
+      }
+      brandGroups.get(brandKey)!.push(eventWithMeta);
+    } else {
+      unbrandedEvents.push(eventWithMeta);
+    }
+  }
+  
+  const result: any[] = [];
+  
+  // Process branded events - group by exact date (same day only)
+  // This preserves consecutive-night events from the same brand/venue
+  for (const [brand, candidates] of brandGroups) {
+    // Sub-group by exact date (same day only, no tolerance)
+    const dateSubgroups: any[][] = [];
+    
+    for (const candidate of candidates) {
+      let addedToGroup = false;
+      for (const subgroup of dateSubgroups) {
+        // Check if this candidate's date is exactly the same day
+        if (areDatesClose(candidate._date, subgroup[0]._date, 0)) {
+          subgroup.push(candidate);
+          addedToGroup = true;
+          break;
+        }
+      }
+      if (!addedToGroup) {
+        dateSubgroups.push([candidate]);
+      }
+    }
+    
+    // For each date subgroup, pick the best event
+    for (const subgroup of dateSubgroups) {
+      // Sort by source URL authoritativeness
+      subgroup.sort((a, b) => scoreSourceUrl(b.sourceUrl) - scoreSourceUrl(a.sourceUrl));
+      
+      const best = subgroup[0];
+      const allSources = subgroup
+        .map(ev => ev.sourceUrl)
+        .filter((url, idx, arr) => url && arr.indexOf(url) === idx);
+      
+      delete best._signature;
+      delete best._date;
+      best.allSourceUrls = allSources;
+      
+      result.push(best);
+    }
+  }
+  
+  // Process unbranded events - use normalized core + exact date
+  const unbrandedGroups = new Map<string, any[]>();
+  
+  for (const ev of unbrandedEvents) {
+    const dateKey = ev._date 
+      ? `${ev._date.getMonth()}-${ev._date.getDate()}-${ev._date.getFullYear()}` 
+      : 'unknown';
+    const groupKey = ev._signature.normalizedCore.substring(0, 20) + `|${dateKey}`;
+    
+    if (!unbrandedGroups.has(groupKey)) {
+      unbrandedGroups.set(groupKey, []);
+    }
+    unbrandedGroups.get(groupKey)!.push(ev);
+  }
+  
+  for (const [key, candidates] of unbrandedGroups) {
+    candidates.sort((a, b) => scoreSourceUrl(b.sourceUrl) - scoreSourceUrl(a.sourceUrl));
+    
+    const best = candidates[0];
+    const allSources = candidates
+      .map(ev => ev.sourceUrl)
+      .filter((url, idx, arr) => url && arr.indexOf(url) === idx);
+    
+    delete best._signature;
+    delete best._date;
+    best.allSourceUrls = allSources;
+    
+    result.push(best);
+  }
+  
+  return result;
+}
+
 export function registerApiRoutes(app: Express): void {
   app.get("/api/events", async (req, res) => {
     try {
@@ -511,6 +777,13 @@ Important:
             } catch (e) {}
           }
           
+          // Check if venue is known to be closed
+          const venueIsClosed = isClosedVenue(ev.venueName);
+          if (venueIsClosed) {
+            console.log(`Filtering out AI event: "${ev.title}" - venue "${ev.venueName}" is known to be closed`);
+            return false;
+          }
+          
           if (!hasTitle || !hasNamedChef || !hasRealVenue || !hasVenueAddress || !hasSourceUrl || !hasSpecificDate || !isInSearchCity) {
             console.log(`Filtering out AI event: "${ev.title}" - missing: chef=${!hasNamedChef}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}, date=${!hasSpecificDate}, location=${!isInSearchCity}`);
             return false;
@@ -641,18 +914,15 @@ Important:
           },
         }));
 
-        const allAiEvents = [...enhancedFreshEvents, ...enhancedCachedEvents];
-        const seenEvents = new Set<string>();
-        const uniqueAiEvents = allAiEvents.filter(ev => {
-          const normalizedTitle = ev.title.toLowerCase()
-            .replace(/&amp;/g, '&')
-            .replace(/[^a-z0-9]/g, '')
-            .trim();
-          const eventKey = `${normalizedTitle}-${ev.date}`;
-          if (seenEvents.has(eventKey)) return false;
-          seenEvents.add(eventKey);
-          return true;
-        });
+        // Filter out closed venues from cached events too
+        const validCachedEvents = enhancedCachedEvents.filter((ev: any) => !isClosedVenue(ev.venue?.name));
+        
+        const allAiEvents = [...enhancedFreshEvents, ...validCachedEvents];
+        
+        // Use smart deduplication with brand/venue/date matching
+        console.log(`Before smart deduplication: ${allAiEvents.length} AI events`);
+        const uniqueAiEvents = deduplicateEvents(allAiEvents);
+        console.log(`After smart deduplication: ${uniqueAiEvents.length} unique AI events`);
 
         const combinedEvents = [...eventsWithRelations, ...uniqueAiEvents];
         

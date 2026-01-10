@@ -48,9 +48,22 @@ The `/api/discover` endpoint uses Gemini AI with Google Search grounding to find
    - Real venue name and address in the searched city
    - Source URL for verification
    - Specific future date
+   - Venue not on closed venues list (e.g., OLO restaurant)
 5. Valid events are cached and accumulated across searches
-6. Events are deduplicated by normalized title + date
+6. Smart deduplication merges duplicate events
 7. Results are sorted chronologically (earliest first)
+
+## Smart Event Deduplication
+
+Events are deduplicated using a multi-step process:
+
+1. **Title Normalization**: Extract signature tokens (brand names like Highland Park, InchDairnie, Bearface), normalize whisky/whiskey spelling, remove generic words
+2. **Brand-based Grouping**: Events with same brand token on the same date are grouped
+3. **Source URL Scoring**: Authoritative sources prioritized (Showpass > official sites > Google redirect URLs)
+4. **Best Event Selection**: The event from the most authoritative source is kept
+5. **Source Aggregation**: All source URLs from merged duplicates are preserved
+
+This reduces 100+ cached variants down to ~8-10 unique events.
 
 ## Chef vs Host Distinction
 
@@ -80,3 +93,11 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## Recent Changes (January 2026)
+
+- Implemented smart event deduplication to eliminate duplicate AI-discovered events
+- Added closed venue validation (OLO restaurant, etc.)
+- Added source URL scoring for authoritative source selection
+- Fixed invalid title filtering (garbage titles like "eventbrite.com")
+- Improved brand token extraction for whisky/wine dinners
