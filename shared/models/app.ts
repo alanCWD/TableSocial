@@ -65,6 +65,30 @@ export const aiIngestions = pgTable("ai_ingestions", {
   approved: boolean("approved").default(false),
 });
 
+export const cachedAiEvents = pgTable("cached_ai_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  location: varchar("location", { length: 255 }).notNull(),
+  title: varchar("title", { length: 255 }).notNull(),
+  description: text("description"),
+  date: varchar("date", { length: 100 }),
+  time: varchar("time", { length: 50 }),
+  price: integer("price"),
+  category: varchar("category", { length: 100 }),
+  sourceUrl: varchar("source_url", { length: 1024 }),
+  hostName: varchar("host_name", { length: 255 }),
+  hostBio: text("host_bio"),
+  hostStyle: varchar("host_style", { length: 255 }),
+  venueName: varchar("venue_name", { length: 255 }),
+  venueAddress: varchar("venue_address", { length: 512 }),
+  venueDescription: text("venue_description"),
+  menuHighlights: jsonb("menu_highlights").$type<string[]>().default([]),
+  cachedAt: timestamp("cached_at").defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+});
+
+export type CachedAiEvent = typeof cachedAiEvents.$inferSelect;
+export type InsertCachedAiEvent = typeof cachedAiEvents.$inferInsert;
+
 export const chefsRelations = relations(chefs, ({ many }) => ({
   events: many(events),
 }));

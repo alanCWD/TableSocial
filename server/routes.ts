@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { db } from "./db.js";
-import { chefs, events, venues, aiIngestions } from "../shared/schema.js";
-import { eq, and, gte, desc } from "drizzle-orm";
+import { chefs, events, venues, aiIngestions, cachedAiEvents } from "../shared/schema.js";
+import { eq, and, gte, desc, lt } from "drizzle-orm";
 import { isAuthenticated } from "./replit_integrations/auth/index.js";
 import { GoogleGenAI, Type } from "@google/genai";
 
@@ -276,6 +276,9 @@ export function registerApiRoutes(app: Express): void {
   app.get("/api/discover", async (req, res) => {
     try {
       const location = (req.query.location as string) || "Victoria, BC";
+      const normalizedLocation = location.toLowerCase().trim();
+      const today = new Date();
+      const CACHE_HOURS = 6;
       
       let eventsWithRelations: any[] = [];
       try {
@@ -304,6 +307,68 @@ export function registerApiRoutes(app: Express): void {
         return res.json({ events: eventsWithRelations, sources: [] });
       }
 
+      const cachedEvents = await db
+        .select()
+        .from(cachedAiEvents)
+        .where(and(
+          eq(cachedAiEvents.location, normalizedLocation),
+          gte(cachedAiEvents.expiresAt, today)
+        ));
+
+      if (cachedEvents.length > 0) {
+        console.log(`Serving ${cachedEvents.length} cached AI events for ${location}`);
+        
+        const validCachedEvents = cachedEvents.filter(ev => {
+          if (ev.date && ev.date.toLowerCase() !== "ongoing" && ev.date.toLowerCase() !== "coming soon") {
+            try {
+              const eventDate = new Date(ev.date);
+              if (!isNaN(eventDate.getTime())) {
+                return eventDate >= today;
+              }
+            } catch (e) {}
+          }
+          return true;
+        });
+        
+        const enhancedCachedEvents = validCachedEvents.map((ev, i) => ({
+          id: ev.id,
+          title: ev.title,
+          description: ev.description || "",
+          date: ev.date || "Coming Soon",
+          time: ev.time || "7:00 PM",
+          price: ev.price || 150,
+          totalSeats: 12,
+          availableSeats: 8,
+          category: ev.category || "Private Dining",
+          menuHighlights: ev.menuHighlights || [],
+          imageUrl: null,
+          sourceUrl: ev.sourceUrl || null,
+          isAiGenerated: true,
+          chef: {
+            id: `cached-chef-${ev.id}`,
+            name: ev.hostName || "Featured Host",
+            bio: ev.hostBio || "",
+            culinaryStyle: ev.hostStyle || "",
+            imageUrl: null,
+            verified: false,
+            pastEventsCount: 0,
+            socialLinks: { instagram: null, website: null, twitter: null },
+          },
+          venue: {
+            id: `cached-venue-${ev.id}`,
+            name: ev.venueName || "Private Venue",
+            description: ev.venueDescription || "",
+            fullAddress: ev.venueAddress || "",
+            capacity: 20,
+            images: [],
+            atmosphere: [],
+          },
+        }));
+
+        const combinedEvents = [...eventsWithRelations, ...enhancedCachedEvents];
+        return res.json({ events: combinedEvents, sources: [] });
+      }
+
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
         return res.json({ events: eventsWithRelations, sources: [] });
@@ -311,42 +376,49 @@ export function registerApiRoutes(app: Express): void {
 
       try {
         const ai = new GoogleGenAI({ apiKey });
-        const today = new Date();
         const currentDateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         
-        const prompt = `Today's date is ${currentDateStr}. Search the web for UPCOMING private dining events, chef's tables, pop-up dinners, whisky dinners, and exclusive culinary experiences in ${location}.
+        const prompt = `Today's date is ${currentDateStr}. Search the web for UPCOMING intimate dining experiences in ${location}.
 
-CRITICAL: Only include events happening AFTER ${currentDateStr}. Do NOT include any past events.
+WHAT TO FIND (prioritize these types):
+- Whisky dinners and wine pairing dinners (e.g., Highland Park Whisky Dinner, InchDairnie Whisky Dinner)
+- Chef's tables and private dining rooms
+- Pop-up dinners by guest chefs
+- Exclusive tasting menus with limited seating (under 40 guests)
+- Multi-course culinary experiences at hotels and restaurants
 
-IMPORTANT SOURCES TO CHECK:
-- hotelgrandpacific.com/dining-events/ (Highland Park Whisky Dinner, InchDairnie Whisky Dinner, and other dining events)
-- Local restaurant websites and event listings
-- Eventbrite and similar event platforms
+WHAT TO EXCLUDE:
+- Large food festivals with hundreds of attendees
+- General restaurant promotions
+- Food tours or walking tours
+- Events without specific dates
 
-Return a JSON array of 3-5 FUTURE events only. Each event object must have exactly these fields:
+CRITICAL REQUIREMENTS:
+- Only events happening AFTER ${currentDateStr}
+- Must have a specific date (not just "ongoing" or seasonal)
+- Must have a real venue with address
+- Must have verifiable source URL
+
+Return a JSON array of 3-5 FUTURE events. Each event object must have these fields:
 {
   "title": "Event name",
   "description": "2-3 sentences about the experience",
   "date": "Month Day, Year",
   "time": "7:00 PM",
   "price": 150,
-  "category": "Pop-up",
+  "category": "Whisky Dinner",
   "sourceUrl": "https://example.com/event",
-  "chefName": "Chef's full name",
-  "chefBio": "Brief chef background",
-  "chefCulinaryStyle": "Cuisine specialty",
-  "chefWebsite": "https://chef-website.com",
-  "chefInstagram": "https://instagram.com/chef",
+  "hostName": "Name of chef, sommelier, or host leading the experience",
+  "hostBio": "Brief background on the host",
+  "hostStyle": "Culinary or beverage specialty",
   "venueName": "Venue name only",
   "venueAddress": "123 Street, City, Province PostalCode",
   "venueDescription": "Brief venue description",
-  "menuHighlights": ["Dish 1", "Dish 2", "Dish 3"]
+  "menuHighlights": ["Course 1", "Course 2", "Pairing notes"]
 }
 
 Important:
-- ONLY include events with dates AFTER ${currentDateStr}
-- Keep venueName short (just the venue name, not the full address)
-- Keep venueAddress as a single clean address string
+- hostName can be a chef, sommelier, whisky ambassador, or venue name if host-led
 - Return valid JSON only, no markdown`;
 
         const response = await ai.models.generateContent({
@@ -404,10 +476,27 @@ Important:
         
         const validAiEvents = aiEvents.filter((ev: any) => {
           const hasTitle = ev.title && ev.title.trim() !== "";
-          const hasRealChef = ev.chefName && ev.chefName.trim() !== "" && ev.chefName.toLowerCase() !== "guest chef";
-          const hasRealVenue = ev.venueName && ev.venueName.trim() !== "";
-          const hasVenueAddress = ev.venueAddress && ev.venueAddress.trim() !== "" && ev.venueAddress.toLowerCase() !== "tbd";
+          const hasHost = (ev.hostName && ev.hostName.trim() !== "") || 
+                          (ev.chefName && ev.chefName.trim() !== "") ||
+                          (ev.venueName && ev.venueName.trim() !== "");
+          const hasRealVenue = ev.venueName && ev.venueName.trim() !== "" && 
+                               ev.venueName.toLowerCase() !== "various" &&
+                               ev.venueName.toLowerCase() !== "various restaurants";
+          const hasVenueAddress = ev.venueAddress && ev.venueAddress.trim() !== "" && 
+                                  ev.venueAddress.toLowerCase() !== "tbd" &&
+                                  ev.venueAddress.toLowerCase() !== "various locations" &&
+                                  ev.venueAddress.toLowerCase() !== "various addresses";
           const hasSourceUrl = ev.sourceUrl && ev.sourceUrl.trim() !== "";
+          
+          const invalidDatePatterns = [
+            "varies", "various", "ongoing", "seasonal", "tbd", "to be announced",
+            "coming soon", "weekly", "monthly", "daily", "every", "saturdays",
+            "sundays", "mondays", "tuesdays", "wednesdays", "thursdays", "fridays"
+          ];
+          const dateLower = (ev.date || "").toLowerCase().trim();
+          const hasSpecificDate = ev.date && ev.date.trim() !== "" &&
+                                  !invalidDatePatterns.some(pattern => dateLower.includes(pattern)) &&
+                                  /\d/.test(ev.date);
           
           let isFutureEvent = true;
           if (ev.date && ev.date.toLowerCase() !== "ongoing" && ev.date.toLowerCase() !== "coming soon") {
@@ -419,19 +508,48 @@ Important:
                   console.log(`Filtering out past event: "${ev.title}" - date: ${ev.date}`);
                 }
               }
-            } catch (e) {
-              // If date parsing fails, keep the event
-            }
+            } catch (e) {}
           }
           
-          if (!hasTitle || !hasRealChef || !hasRealVenue || !hasVenueAddress || !hasSourceUrl) {
-            console.log(`Filtering out AI event: "${ev.title}" - missing: chef=${!hasRealChef}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}`);
+          if (!hasTitle || !hasHost || !hasRealVenue || !hasVenueAddress || !hasSourceUrl || !hasSpecificDate) {
+            console.log(`Filtering out AI event: "${ev.title}" - missing: host=${!hasHost}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}, date=${!hasSpecificDate}`);
             return false;
           }
           return isFutureEvent;
         });
         
         console.log(`AI events after validation: ${validAiEvents.length} of ${aiEvents.length} passed`);
+
+        const expiresAt = new Date(today.getTime() + CACHE_HOURS * 60 * 60 * 1000);
+        
+        for (const ev of validAiEvents) {
+          try {
+            await db.insert(cachedAiEvents).values({
+              location: normalizedLocation,
+              title: ev.title,
+              description: ev.description || null,
+              date: ev.date || null,
+              time: ev.time || null,
+              price: typeof ev.price === 'number' ? Math.round(ev.price) : null,
+              category: ev.category || null,
+              sourceUrl: ev.sourceUrl || null,
+              hostName: ev.hostName || ev.chefName || null,
+              hostBio: ev.hostBio || ev.chefBio || null,
+              hostStyle: ev.hostStyle || ev.chefCulinaryStyle || null,
+              venueName: ev.venueName || null,
+              venueAddress: ev.venueAddress || null,
+              venueDescription: ev.venueDescription || null,
+              menuHighlights: ev.menuHighlights || [],
+              expiresAt,
+            });
+          } catch (cacheError) {
+            console.error("Failed to cache AI event:", cacheError);
+          }
+        }
+        
+        if (validAiEvents.length > 0) {
+          console.log(`Cached ${validAiEvents.length} AI events for ${location}, expires at ${expiresAt.toISOString()}`);
+        }
 
         const enhancedAiEvents = validAiEvents.map((ev: any, i: number) => ({
           id: `ai-event-${Date.now()}-${i}`,
@@ -442,16 +560,16 @@ Important:
           price: ev.price || 150,
           totalSeats: ev.totalSeats || 12,
           availableSeats: ev.availableSeats || 8,
-          category: ev.category || "Pop-up",
+          category: ev.category || "Private Dining",
           menuHighlights: ev.menuHighlights || [],
           imageUrl: ev.imageUrl || null,
           sourceUrl: ev.sourceUrl || null,
           isAiGenerated: true,
           chef: {
             id: `ai-chef-${Date.now()}-${i}`,
-            name: ev.chefName,
-            bio: ev.chefBio || "",
-            culinaryStyle: ev.chefCulinaryStyle || "",
+            name: ev.hostName || ev.chefName || "Featured Host",
+            bio: ev.hostBio || ev.chefBio || "",
+            culinaryStyle: ev.hostStyle || ev.chefCulinaryStyle || "",
             imageUrl: null,
             verified: false,
             pastEventsCount: 0,
