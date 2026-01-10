@@ -307,8 +307,25 @@ export function registerApiRoutes(app: Express): void {
         return res.json({ events: eventsWithRelations, sources: [] });
       }
 
-      // CACHE DISABLED: Always query Gemini fresh to accumulate events
-      // Events are still saved to cached_ai_events table for persistence
+      let cachedEvents: any[] = [];
+      try {
+        cachedEvents = await db
+          .select()
+          .from(cachedAiEvents)
+          .where(eq(cachedAiEvents.location, normalizedLocation));
+        
+        const futureOnlyCached = cachedEvents.filter(ev => {
+          if (!ev.date) return false;
+          try {
+            const eventDate = new Date(ev.date);
+            return !isNaN(eventDate.getTime()) && eventDate >= today;
+          } catch { return true; }
+        });
+        cachedEvents = futureOnlyCached;
+        console.log(`Found ${cachedEvents.length} cached events for ${location}`);
+      } catch (cacheError) {
+        console.error("Cache read error:", cacheError);
+      }
 
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
@@ -323,7 +340,15 @@ export function registerApiRoutes(app: Express): void {
         
         const prompt = `Today's date is ${currentDateStr}. Search the web for UPCOMING intimate dining experiences in ${location}.
 
+SEARCH THESE TYPES OF SOURCES:
+- Local catering companies with event pages (e.g., hobfinefoods.ca/long-table-events)
+- Showpass, Eventbrite, Do250.com event listings for ${searchCity}
+- Hotel restaurant event calendars (Hotel Grand Pacific, Fairmont Empress, Chateau Victoria)
+- Winery and distillery dinner event pages
+- Local chef and culinary pop-up Instagram/websites
+
 WHAT TO FIND (prioritize these types):
+- "Long Table Dinners" by named chefs like Chef Castro, Chef Rob
 - Whisky dinners with named ambassadors (e.g., "InchDairnie Whisky Dinner")
 - Wine pairing dinners with named sommeliers
 - Chef's tables hosted by specific named chefs
@@ -530,7 +555,7 @@ Important:
           console.log(`Cached ${validAiEvents.length} AI events for ${location}, expires at ${expiresAt.toISOString()}`);
         }
 
-        const enhancedAiEvents = validAiEvents.map((ev: any, i: number) => ({
+        const enhancedFreshEvents = validAiEvents.map((ev: any, i: number) => ({
           id: `ai-event-${Date.now()}-${i}`,
           title: ev.title,
           description: ev.description || "",
@@ -575,7 +600,61 @@ Important:
           },
         }));
 
-        const combinedEvents = [...eventsWithRelations, ...enhancedAiEvents];
+        const enhancedCachedEvents = cachedEvents.map((ev: any, i: number) => ({
+          id: `cached-event-${ev.id || i}`,
+          title: ev.title,
+          description: ev.description || "",
+          date: ev.date || "Coming Soon",
+          time: ev.time || "7:00 PM",
+          price: ev.price || 150,
+          totalSeats: 12,
+          availableSeats: 8,
+          category: ev.category || "Private Dining",
+          menuHighlights: ev.menuHighlights || [],
+          imageUrl: null,
+          sourceUrl: ev.sourceUrl || null,
+          isAiGenerated: true,
+          chef: {
+            id: `cached-chef-${ev.id || i}`,
+            name: ev.chefName || "Featured Chef",
+            bio: ev.chefBio || "",
+            culinaryStyle: ev.chefStyle || "",
+            imageUrl: null,
+            verified: false,
+            pastEventsCount: 0,
+            socialLinks: { instagram: null, website: null, twitter: null },
+          },
+          host: ev.hostName ? {
+            id: `cached-host-${ev.id || i}`,
+            name: ev.hostName,
+            bio: ev.hostBio || "",
+            role: ev.hostRole || "Host",
+          } : null,
+          venue: {
+            id: `cached-venue-${ev.id || i}`,
+            name: ev.venueName || "Venue",
+            description: ev.venueDescription || "",
+            fullAddress: ev.venueAddress || "",
+            capacity: 20,
+            images: [],
+            atmosphere: [],
+          },
+        }));
+
+        const allAiEvents = [...enhancedFreshEvents, ...enhancedCachedEvents];
+        const seenEvents = new Set<string>();
+        const uniqueAiEvents = allAiEvents.filter(ev => {
+          const normalizedTitle = ev.title.toLowerCase()
+            .replace(/&amp;/g, '&')
+            .replace(/[^a-z0-9]/g, '')
+            .trim();
+          const eventKey = `${normalizedTitle}-${ev.date}`;
+          if (seenEvents.has(eventKey)) return false;
+          seenEvents.add(eventKey);
+          return true;
+        });
+
+        const combinedEvents = [...eventsWithRelations, ...uniqueAiEvents];
         
         combinedEvents.sort((a, b) => {
           try {
