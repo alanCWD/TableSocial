@@ -107,8 +107,21 @@ API endpoints:
 
 Auto-slug generation: Slugs are auto-generated from titles when chefs/events are created via admin.
 
+## AI Auto-Ingestion
+
+AI-discovered content is automatically saved to the database for admin review:
+
+- **Service**: `server/services/aiIngestion.ts`
+- **Trigger**: Runs asynchronously after smart deduplication in `/api/discover`
+- **Behavior**: 
+  - Chefs, venues, and events are created as drafts with `origin="ai"` and `status="draft"`
+  - Name normalization prevents duplicates (strips "Chef", "Restaurant" prefixes)
+  - In-memory caching avoids duplicate DB queries within a batch
+  - Slug-based and fuzzy name matching ensure deduplication
+
 ## Recent Changes (January 2026)
 
+- Added AI auto-ingestion to persist discovered chefs, venues, and events to database
 - Added SEO-friendly individual pages for chefs (/chef/:slug) and events (/event/:slug)
 - Implemented Schema.org JSON-LD structured data for search engine discoverability
 - Added URL-based SPA routing with browser history support
