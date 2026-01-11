@@ -57,7 +57,14 @@ const App: React.FC = () => {
     fetch('/api/auth/user')
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
-        if (data) setUser(data);
+        if (data) {
+          const name = [data.firstName, data.lastName].filter(Boolean).join(' ') || data.email || 'User';
+          setUser({
+            id: data.id,
+            name,
+            profileImage: data.profileImageUrl,
+          });
+        }
       })
       .catch(() => {});
   }, []);
