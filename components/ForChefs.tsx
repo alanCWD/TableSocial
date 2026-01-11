@@ -1,8 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Chef } from '../types';
 import { ChefCard } from './ChefCard';
-import { VERIFIED_CHEFS } from '../data/chefRegistry';
 
 interface ForChefsProps {
   onChefClick: (chef: Chef) => void;
@@ -10,11 +9,37 @@ interface ForChefsProps {
 
 export const ForChefs: React.FC<ForChefsProps> = ({ onChefClick }) => {
   const [filter, setFilter] = useState('All');
+  const [chefs, setChefs] = useState<Chef[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch('/api/chefs')
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to fetch chefs');
+        return res.json();
+      })
+      .then(data => {
+        const chefsData = data.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          bio: c.bio || '',
+          culinaryStyle: c.culinaryStyle || '',
+          imageUrl: c.imageUrl || 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&q=80&w=600',
+          pastEventsCount: c.pastEventsCount || 0,
+          verified: c.verified || false,
+          region: c.region || 'Victoria, BC',
+          socialLinks: c.socialLinks || {},
+        }));
+        setChefs(chefsData);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
   
   const regions = ['All', 'Victoria, BC', 'Vancouver Island'];
   const filteredChefs = filter === 'All' 
-    ? VERIFIED_CHEFS 
-    : VERIFIED_CHEFS.filter(c => c.region === filter);
+    ? chefs 
+    : chefs.filter(c => c.region === filter);
 
   return (
     <div className="bg-[#faf9f6]">
@@ -57,9 +82,19 @@ export const ForChefs: React.FC<ForChefsProps> = ({ onChefClick }) => {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-12">
-          {filteredChefs.map(chef => (
-            <ChefCard key={chef.id} chef={chef} onClick={onChefClick} />
-          ))}
+          {loading ? (
+            <div className="col-span-full text-center py-12">
+              <div className="animate-pulse text-gray-400">Loading chefs...</div>
+            </div>
+          ) : filteredChefs.length === 0 ? (
+            <div className="col-span-full text-center py-12 text-gray-400">
+              No chefs found in this region yet.
+            </div>
+          ) : (
+            filteredChefs.map(chef => (
+              <ChefCard key={chef.id} chef={chef} onClick={onChefClick} />
+            ))
+          )}
         </div>
       </section>
 

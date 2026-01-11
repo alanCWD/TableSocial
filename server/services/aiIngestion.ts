@@ -43,9 +43,10 @@ function normalizeVenueName(name: string): string {
 async function findOrCreateChef(name: string, bio?: string, style?: string, region?: string): Promise<string> {
   const rawName = name.trim();
   const normalizedName = normalizeChefName(rawName);
-  const slug = generateSlug(rawName);
+  const canonicalName = rawName.toLowerCase().startsWith('chef ') ? rawName : `Chef ${rawName.replace(/^chef\s+/i, '')}`;
+  const slug = generateSlug(canonicalName);
   
-  const existing = await db.select({ id: chefs.id }).from(chefs).where(
+  const existing = await db.select({ id: chefs.id, name: chefs.name }).from(chefs).where(
     or(
       eq(chefs.slug, slug),
       ilike(chefs.name, rawName),
@@ -55,7 +56,20 @@ async function findOrCreateChef(name: string, bio?: string, style?: string, regi
   ).limit(1);
   
   if (existing.length > 0) {
+    console.log(`Found existing chef match: "${rawName}" → "${existing[0].name}"`);
     return existing[0].id;
+  }
+  
+  const nameParts = normalizedName.split(' ');
+  if (nameParts.length === 1 && nameParts[0].length > 2) {
+    const partialMatch = await db.select({ id: chefs.id, name: chefs.name }).from(chefs).where(
+      sql`LOWER(REPLACE(${chefs.name}, 'Chef ', '')) LIKE ${nameParts[0] + ' %'}`
+    ).limit(1);
+    
+    if (partialMatch.length > 0) {
+      console.log(`Found partial chef match: "${rawName}" → "${partialMatch[0].name}" (first name match)`);
+      return partialMatch[0].id;
+    }
   }
   
   let uniqueSlug = slug;
@@ -68,7 +82,7 @@ async function findOrCreateChef(name: string, bio?: string, style?: string, regi
   }
   
   const newChef: InsertChef = {
-    name: rawName,
+    name: canonicalName,
     slug: uniqueSlug,
     bio: bio || null,
     culinaryStyle: style || null,
@@ -77,7 +91,7 @@ async function findOrCreateChef(name: string, bio?: string, style?: string, regi
   };
   
   const [created] = await db.insert(chefs).values(newChef).returning({ id: chefs.id });
-  console.log(`Created new chef: ${rawName} (${created.id})`);
+  console.log(`Created new chef: ${canonicalName} (${created.id})`);
   return created.id;
 }
 
