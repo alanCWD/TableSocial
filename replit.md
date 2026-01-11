@@ -119,8 +119,25 @@ AI-discovered content is automatically saved to the database for admin review:
   - In-memory caching avoids duplicate DB queries within a batch
   - Slug-based and fuzzy name matching ensure deduplication
 
+## Chef Naming Convention
+
+All chef names use the "Chef" prefix (e.g., "Chef Castro Boateng", "Chef Ito Takashi"). This is enforced:
+- In the database: All chef records have "Chef" prefix
+- In AI ingestion: New chefs are automatically created with "Chef" prefix
+- In matching: First-name matching prevents duplicates (e.g., "Chef Ito" matches "Chef Ito Takashi")
+
+## Unified Chef Data
+
+The For Chefs page (`/for-chefs`) fetches chef data from the database API (`GET /api/chefs`) instead of static files. This ensures:
+- Admin changes are immediately reflected on the public site
+- Single source of truth for chef data
+- Consistent display across all pages
+
 ## Recent Changes (January 2026)
 
+- Unified chef data system: For Chefs page now uses database API instead of static file
+- Standardized chef naming with "Chef" prefix across all systems
+- Improved AI ingestion chef matching to prevent duplicates
 - Added AI auto-ingestion to persist discovered chefs, venues, and events to database
 - Added SEO-friendly individual pages for chefs (/chef/:slug) and events (/event/:slug)
 - Implemented Schema.org JSON-LD structured data for search engine discoverability
