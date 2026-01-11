@@ -5,6 +5,7 @@ import { eq, and, gte, desc, lt } from "drizzle-orm";
 import { isAuthenticated } from "./replit_integrations/auth/index.js";
 import { GoogleGenAI, Type } from "@google/genai";
 import { generateSlug, generateEventJsonLd, generateChefJsonLd } from "./utils/slug.js";
+import { persistAiDiscoveries } from "./services/aiIngestion.js";
 
 // Known closed venues that should be rejected (exact match on full name or word boundaries)
 const CLOSED_VENUES = [
@@ -975,6 +976,32 @@ Important:
         console.log(`Before smart deduplication: ${allAiEvents.length} AI events`);
         const uniqueAiEvents = deduplicateEvents(allAiEvents);
         console.log(`After smart deduplication: ${uniqueAiEvents.length} unique AI events`);
+
+        // Auto-persist discovered chefs, venues, and events to database
+        const aiEventsForPersistence = uniqueAiEvents.map((ev: any) => ({
+          title: ev.title,
+          description: ev.description,
+          date: ev.date,
+          time: ev.time,
+          price: ev.price,
+          category: ev.category,
+          sourceUrl: ev.sourceUrl,
+          chefName: ev.chef?.name,
+          chefBio: ev.chef?.bio,
+          chefStyle: ev.chef?.culinaryStyle,
+          hostName: ev.host?.name,
+          hostBio: ev.host?.bio,
+          hostRole: ev.host?.role,
+          venueName: ev.venue?.name,
+          venueAddress: ev.venue?.fullAddress,
+          venueCity: location,
+          venueDescription: ev.venue?.description,
+          menuHighlights: ev.menuHighlights,
+        }));
+        
+        persistAiDiscoveries(aiEventsForPersistence, location).catch(err => {
+          console.error("Error persisting AI discoveries:", err);
+        });
 
         const combinedEvents = [...eventsWithRelations, ...uniqueAiEvents];
         
