@@ -8,10 +8,26 @@ import { ChefCard } from './components/ChefCard';
 import { ForChefs } from './components/ForChefs';
 import { HowItWorks } from './components/HowItWorks';
 import { AdminDashboard } from './components/admin/AdminDashboard';
+import { ChefPage } from './components/ChefPage';
+import { EventPage } from './components/EventPage';
 import { DiningEvent, SearchState, Chef, Venue } from './types';
 import { fetchDiningEvents } from './services/geminiService';
 
 type Page = 'explore' | 'how-it-works' | 'for-chefs' | 'admin';
+type RouteType = { type: 'page'; page: Page } | { type: 'chef'; slug: string } | { type: 'event'; slug: string };
+
+function parseRoute(): RouteType {
+  const path = window.location.pathname;
+  if (path.startsWith('/chef/')) {
+    const slug = path.replace('/chef/', '');
+    return { type: 'chef', slug };
+  }
+  if (path.startsWith('/event/')) {
+    const slug = path.replace('/event/', '');
+    return { type: 'event', slug };
+  }
+  return { type: 'page', page: 'explore' };
+}
 
 interface User {
   id: string;
@@ -20,6 +36,7 @@ interface User {
 }
 
 const App: React.FC = () => {
+  const [route, setRoute] = useState<RouteType>(parseRoute);
   const [currentPage, setCurrentPage] = useState<Page>('explore');
   const [user, setUser] = useState<User | null>(null);
   const [search, setSearch] = useState<SearchState>({
@@ -44,6 +61,22 @@ const App: React.FC = () => {
       })
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const handlePopState = () => setRoute(parseRoute());
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const navigateTo = (path: string) => {
+    window.history.pushState({}, '', path);
+    setRoute(parseRoute());
+  };
+
+  const goHome = () => {
+    window.history.pushState({}, '', '/');
+    setRoute({ type: 'page', page: 'explore' });
+  };
 
   const handleSignIn = () => {
     window.location.href = '/api/login';
@@ -245,6 +278,26 @@ const App: React.FC = () => {
         );
     }
   };
+
+  if (route.type === 'chef') {
+    return (
+      <ChefPage
+        slug={route.slug}
+        onBack={goHome}
+        onEventClick={(slug) => navigateTo(`/event/${slug}`)}
+      />
+    );
+  }
+
+  if (route.type === 'event') {
+    return (
+      <EventPage
+        slug={route.slug}
+        onBack={goHome}
+        onChefClick={(slug) => navigateTo(`/chef/${slug}`)}
+      />
+    );
+  }
 
   if (currentPage === 'admin') {
     if (!user) {

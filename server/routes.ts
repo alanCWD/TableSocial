@@ -4,6 +4,7 @@ import { chefs, events, venues, aiIngestions, cachedAiEvents } from "../shared/s
 import { eq, and, gte, desc, lt } from "drizzle-orm";
 import { isAuthenticated } from "./replit_integrations/auth/index.js";
 import { GoogleGenAI, Type } from "@google/genai";
+import { generateSlug, generateEventJsonLd, generateChefJsonLd } from "./utils/slug.js";
 
 // Known closed venues that should be rejected (exact match on full name or word boundaries)
 const CLOSED_VENUES = [
@@ -323,9 +324,58 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  app.get("/api/chef/:slug", async (req, res) => {
+    try {
+      const [chef] = await db.select().from(chefs).where(eq(chefs.slug, req.params.slug));
+      if (!chef) {
+        return res.status(404).json({ error: "Chef not found" });
+      }
+      const chefEvents = await db.select().from(events)
+        .where(and(eq(events.chefId, chef.id), eq(events.status, "published")))
+        .orderBy(desc(events.date));
+      const jsonLd = generateChefJsonLd(chef);
+      res.json({ ...chef, events: chefEvents, jsonLd });
+    } catch (error) {
+      console.error("Error fetching chef by slug:", error);
+      res.status(500).json({ error: "Failed to fetch chef" });
+    }
+  });
+
+  app.get("/api/event/:slug", async (req, res) => {
+    try {
+      const [event] = await db.select().from(events).where(eq(events.slug, req.params.slug));
+      if (!event) {
+        return res.status(404).json({ error: "Event not found" });
+      }
+      const chef = event.chefId
+        ? (await db.select().from(chefs).where(eq(chefs.id, event.chefId)))[0]
+        : null;
+      const venue = event.venueId
+        ? (await db.select().from(venues).where(eq(venues.id, event.venueId)))[0]
+        : null;
+      const jsonLd = generateEventJsonLd({
+        title: event.title,
+        description: event.description,
+        date: event.date,
+        time: event.time,
+        price: event.price,
+        imageUrl: event.imageUrl,
+        venueName: venue?.name,
+        venueAddress: venue?.fullAddress,
+        chefName: chef?.name,
+        sourceUrls: event.sourceUrls as string[] | null,
+      });
+      res.json({ ...event, chef, venue, jsonLd });
+    } catch (error) {
+      console.error("Error fetching event by slug:", error);
+      res.status(500).json({ error: "Failed to fetch event" });
+    }
+  });
+
   app.post("/api/admin/chefs", isAuthenticated, async (req, res) => {
     try {
-      const [chef] = await db.insert(chefs).values(req.body).returning();
+      const slug = req.body.slug || generateSlug(req.body.name);
+      const [chef] = await db.insert(chefs).values({ ...req.body, slug }).returning();
       res.json(chef);
     } catch (error) {
       console.error("Error creating chef:", error);
@@ -359,7 +409,8 @@ export function registerApiRoutes(app: Express): void {
 
   app.post("/api/admin/venues", isAuthenticated, async (req, res) => {
     try {
-      const [venue] = await db.insert(venues).values(req.body).returning();
+      const slug = req.body.slug || generateSlug(req.body.name);
+      const [venue] = await db.insert(venues).values({ ...req.body, slug }).returning();
       res.json(venue);
     } catch (error) {
       console.error("Error creating venue:", error);
@@ -393,7 +444,8 @@ export function registerApiRoutes(app: Express): void {
 
   app.post("/api/admin/events", isAuthenticated, async (req, res) => {
     try {
-      const [event] = await db.insert(events).values(req.body).returning();
+      const slug = req.body.slug || generateSlug(req.body.title, req.body.date);
+      const [event] = await db.insert(events).values({ ...req.body, slug }).returning();
       res.json(event);
     } catch (error) {
       console.error("Error creating event:", error);
