@@ -119,3 +119,7 @@ Auto-slug generation: Slugs are auto-generated from titles when chefs/events are
 - Added source URL scoring for authoritative source selection
 - Fixed invalid title filtering (garbage titles like "eventbrite.com")
 - Improved brand token extraction for whisky/wine dinners
+- Fixed production deployment routing (API paths now bypass catch-all middleware)
+- Added slug editing and publish toggle UI to Chef and Event admin forms
+- Fixed publishedAt logic to preserve timestamps when editing published content
+- Added "View" links in admin tables for published chefs/events
