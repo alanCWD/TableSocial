@@ -30,6 +30,7 @@ interface Event {
   location?: string | null;
   chef?: Chef | null;
   venue?: Venue | null;
+  slug?: string | null;
 }
 
 export const EventManager: React.FC = () => {
@@ -56,6 +57,7 @@ export const EventManager: React.FC = () => {
     venueId: '',
     status: 'draft' as 'draft' | 'published' | 'archived',
     location: '',
+    slug: '',
   });
 
   useEffect(() => {
@@ -102,6 +104,7 @@ export const EventManager: React.FC = () => {
       venueId: '',
       status: 'draft',
       location: '',
+      slug: '',
     });
     setEditingEvent(null);
     setShowForm(false);
@@ -123,6 +126,7 @@ export const EventManager: React.FC = () => {
       venueId: event.venueId || '',
       status: event.status,
       location: event.location || '',
+      slug: event.slug || '',
     });
     setEditingEvent(event);
     setShowForm(true);
@@ -151,6 +155,7 @@ export const EventManager: React.FC = () => {
         status: form.status,
         origin: 'admin' as const,
         location: form.location || null,
+        slug: form.slug || null,
       };
 
       const url = editingEvent
@@ -381,6 +386,24 @@ export const EventManager: React.FC = () => {
                   <option value="archived">Archived</option>
                 </select>
               </div>
+              <div className="md:col-span-2 border-t border-gray-100 pt-4 mt-2">
+                <h4 className="text-sm font-bold text-gray-700 mb-3">SEO Settings</h4>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    URL Slug
+                  </label>
+                  <input
+                    type="text"
+                    value={form.slug}
+                    onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                    placeholder="auto-generated-from-title"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent font-mono text-sm"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    {form.slug ? `Public URL: /event/${form.slug}` : 'Leave blank to auto-generate from title + date'}
+                  </p>
+                </div>
+              </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Description
@@ -485,7 +508,16 @@ export const EventManager: React.FC = () => {
                     {event.chef?.name || '—'}
                   </td>
                   <td className="px-6 py-4 text-gray-600">{event.date || '—'}</td>
-                  <td className="px-6 py-4">{getStatusBadge(event.status)}</td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1">
+                      {getStatusBadge(event.status)}
+                      {event.status === 'published' && event.slug && (
+                        <a href={`/event/${event.slug}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline text-xs ml-1">
+                          View
+                        </a>
+                      )}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <button
                       onClick={() => handleEdit(event)}

@@ -29,7 +29,10 @@ async function main() {
   if (isProduction) {
     const staticPath = path.resolve(__dirname, "..");
     app.use(express.static(staticPath));
-    app.use((req, res) => {
+    app.use((req, res, next) => {
+      if (req.path.startsWith('/api/')) {
+        return next();
+      }
       res.sendFile(path.join(staticPath, "index.html"));
     });
   }

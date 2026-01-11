@@ -11,6 +11,8 @@ interface Chef {
   socialLinks?: { instagram?: string; website?: string; twitter?: string } | null;
   imageUrl?: string | null;
   pastEventsCount?: number | null;
+  slug?: string | null;
+  publishedAt?: string | null;
 }
 
 export const ChefManager: React.FC = () => {
@@ -28,6 +30,8 @@ export const ChefManager: React.FC = () => {
     imageUrl: '',
     instagram: '',
     website: '',
+    slug: '',
+    published: false,
   });
 
   useEffect(() => {
@@ -55,6 +59,8 @@ export const ChefManager: React.FC = () => {
       imageUrl: '',
       instagram: '',
       website: '',
+      slug: '',
+      published: false,
     });
     setEditingChef(null);
     setShowForm(false);
@@ -69,6 +75,8 @@ export const ChefManager: React.FC = () => {
       imageUrl: chef.imageUrl || '',
       instagram: chef.socialLinks?.instagram || '',
       website: chef.socialLinks?.website || '',
+      slug: chef.slug || '',
+      published: !!chef.publishedAt,
     });
     setEditingChef(chef);
     setShowForm(true);
@@ -79,6 +87,13 @@ export const ChefManager: React.FC = () => {
     setSaving(true);
 
     try {
+      const wasPublished = editingChef?.publishedAt ? true : false;
+      let publishedAt: string | null = null;
+      
+      if (form.published) {
+        publishedAt = wasPublished ? editingChef.publishedAt! : new Date().toISOString();
+      }
+      
       const payload = {
         name: form.name,
         bio: form.bio || null,
@@ -89,6 +104,8 @@ export const ChefManager: React.FC = () => {
           instagram: form.instagram || undefined,
           website: form.website || undefined,
         },
+        slug: form.slug || null,
+        publishedAt,
       };
 
       const url = editingChef
@@ -236,6 +253,40 @@ export const ChefManager: React.FC = () => {
                   label="Chef Photo"
                 />
               </div>
+              <div className="md:col-span-2 border-t border-gray-100 pt-4 mt-2">
+                <h4 className="text-sm font-bold text-gray-700 mb-3">SEO & Publishing</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      URL Slug
+                    </label>
+                    <input
+                      type="text"
+                      value={form.slug}
+                      onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                      placeholder="auto-generated-from-name"
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-accent focus:border-transparent font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      {form.slug ? `Public URL: /chef/${form.slug}` : 'Leave blank to auto-generate'}
+                    </p>
+                  </div>
+                  <div className="flex items-center">
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.published}
+                        onChange={(e) => setForm({ ...form, published: e.target.checked })}
+                        className="sr-only peer"
+                      />
+                      <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-accent/20 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
+                      <span className="ms-3 text-sm font-medium text-gray-700">
+                        {form.published ? 'Published' : 'Draft'}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">
@@ -274,7 +325,7 @@ export const ChefManager: React.FC = () => {
                   Style
                 </th>
                 <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Region
+                  Status
                 </th>
                 <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
                   Actions
@@ -308,7 +359,20 @@ export const ChefManager: React.FC = () => {
                   <td className="px-6 py-4 text-gray-600">
                     {chef.culinaryStyle || '—'}
                   </td>
-                  <td className="px-6 py-4 text-gray-600">{chef.region || '—'}</td>
+                  <td className="px-6 py-4">
+                    {chef.publishedAt ? (
+                      <span className="inline-flex items-center gap-1">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">Published</span>
+                        {chef.slug && (
+                          <a href={`/chef/${chef.slug}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline text-xs">
+                            View
+                          </a>
+                        )}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Draft</span>
+                    )}
+                  </td>
                   <td className="px-6 py-4 text-right">
                     <button
                       onClick={() => handleEdit(chef)}
