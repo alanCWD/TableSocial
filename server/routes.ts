@@ -386,9 +386,13 @@ export function registerApiRoutes(app: Express): void {
 
   app.put("/api/admin/chefs/:id", isAuthenticated, async (req, res) => {
     try {
+      const updateData = { ...req.body, updatedAt: new Date() };
+      if (updateData.publishedAt && typeof updateData.publishedAt === 'string') {
+        updateData.publishedAt = new Date(updateData.publishedAt);
+      }
       const [chef] = await db
         .update(chefs)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set(updateData)
         .where(eq(chefs.id, req.params.id))
         .returning();
       res.json(chef);
@@ -421,9 +425,13 @@ export function registerApiRoutes(app: Express): void {
 
   app.put("/api/admin/venues/:id", isAuthenticated, async (req, res) => {
     try {
+      const updateData = { ...req.body, updatedAt: new Date() };
+      if (updateData.publishedAt && typeof updateData.publishedAt === 'string') {
+        updateData.publishedAt = new Date(updateData.publishedAt);
+      }
       const [venue] = await db
         .update(venues)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set(updateData)
         .where(eq(venues.id, req.params.id))
         .returning();
       res.json(venue);
@@ -456,9 +464,13 @@ export function registerApiRoutes(app: Express): void {
 
   app.put("/api/admin/events/:id", isAuthenticated, async (req, res) => {
     try {
+      const updateData = { ...req.body, updatedAt: new Date() };
+      if (updateData.publishedAt && typeof updateData.publishedAt === 'string') {
+        updateData.publishedAt = new Date(updateData.publishedAt);
+      }
       const [event] = await db
         .update(events)
-        .set({ ...req.body, updatedAt: new Date() })
+        .set(updateData)
         .where(eq(events.id, req.params.id))
         .returning();
       res.json(event);
