@@ -4,10 +4,10 @@ import { Chef } from '../types';
 export const VERIFIED_CHEFS: Chef[] = [
   {
     id: 'castro-boateng',
-    name: 'Castro Boateng',
+    name: 'Chef Castro Boateng',
     bio: 'Chef Castro Boateng is the mastermind behind HOB Fine Foods. Known for his "Global Roots, Island Soul" philosophy, he creates intricate West African influenced West Coast cuisine. His long-table events at HOB are legendary for their vibrancy and communal spirit.',
     culinaryStyle: 'Global Roots / West African Influence',
-    imageUrl: 'https://images.unsplash.com/photo-1577219491135-ce391730fb2c?auto=format&fit=crop&q=80&w=600',
+    imageUrl: '/objects/uploads/483430b3-a214-4b55-9920-49b73aac32fa',
     pastEventsCount: 250,
     verified: true,
     region: 'Victoria, BC',
