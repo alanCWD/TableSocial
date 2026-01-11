@@ -94,8 +94,26 @@ npm run dev
 npm run build
 ```
 
+## SEO-Friendly Pages
+
+Individual chef and event pages with SEO-friendly URLs and Schema.org JSON-LD structured data:
+
+- `/chef/:slug` - Chef profile pages with Person schema (includes jobTitle, workLocation, sameAs)
+- `/event/:slug` - Event detail pages with FoodEvent schema (includes offers, location, performer)
+
+API endpoints:
+- `GET /api/chef/:slug` - Returns chef data with upcoming events and JSON-LD
+- `GET /api/event/:slug` - Returns event data with chef/venue details and JSON-LD
+
+Auto-slug generation: Slugs are auto-generated from titles when chefs/events are created via admin.
+
 ## Recent Changes (January 2026)
 
+- Added SEO-friendly individual pages for chefs (/chef/:slug) and events (/event/:slug)
+- Implemented Schema.org JSON-LD structured data for search engine discoverability
+- Added URL-based SPA routing with browser history support
+- Added slug, heroImageId, publishedAt fields to database schema
+- Created media_assets table for organized image management
 - Implemented smart event deduplication to eliminate duplicate AI-discovered events
 - Added closed venue validation (OLO restaurant, etc.)
 - Added source URL scoring for authoritative source selection

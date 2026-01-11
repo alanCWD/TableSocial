@@ -76,6 +76,7 @@ const App: React.FC = () => {
   const goHome = () => {
     window.history.pushState({}, '', '/');
     setRoute({ type: 'page', page: 'explore' });
+    setCurrentPage('explore');
   };
 
   const handleSignIn = () => {
