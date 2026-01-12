@@ -57,7 +57,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
             />
           )}
           <div>
-            <p className="text-accent font-semibold text-sm">Chef {chefName}</p>
+            <p className="text-accent font-semibold text-sm">{chefName.startsWith('Chef ') ? chefName : `Chef ${chefName}`}</p>
             {event.chef?.culinaryStyle && (
               <p className="text-gray-400 text-xs">{event.chef.culinaryStyle}</p>
             )}

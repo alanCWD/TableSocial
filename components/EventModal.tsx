@@ -71,10 +71,16 @@ export const EventModal: React.FC<EventModalProps> = ({ event, onClose, onViewCh
               <div className="mb-8">
                 <div className="flex items-center gap-4 mb-8">
                   <div 
-                    className="w-14 h-14 rounded-full overflow-hidden cursor-pointer border-2 border-white shadow-md hover:scale-105 transition-transform"
+                    className="w-14 h-14 rounded-full overflow-hidden cursor-pointer border-2 border-white shadow-md hover:scale-105 transition-transform bg-gray-100"
                     onClick={() => event.chef && onViewChef(event.chef)}
                   >
-                    <img src={event.chef?.imageUrl} className="w-full h-full object-cover" alt={event.chef?.name} />
+                    {event.chef?.imageUrl ? (
+                      <img src={event.chef.imageUrl} className="w-full h-full object-cover" alt={event.chef?.name} />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-400">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <button 
