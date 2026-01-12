@@ -893,91 +893,136 @@ Important:
           console.log(`Cached ${validAiEvents.length} AI events for ${location}, expires at ${expiresAt.toISOString()}`);
         }
 
-        const enhancedFreshEvents = validAiEvents.map((ev: any, i: number) => ({
-          id: `ai-event-${Date.now()}-${i}`,
-          title: ev.title,
-          description: ev.description || "",
-          date: ev.date || "Coming Soon",
-          time: ev.time || "7:00 PM",
-          price: ev.price || 150,
-          totalSeats: ev.totalSeats || 12,
-          availableSeats: ev.availableSeats || 8,
-          category: ev.category || "Private Dining",
-          menuHighlights: ev.menuHighlights || [],
-          imageUrl: ev.imageUrl || null,
-          sourceUrl: ev.sourceUrl || null,
-          isAiGenerated: true,
-          chef: {
-            id: `ai-chef-${Date.now()}-${i}`,
-            name: ev.chefName || "Featured Chef",
-            bio: ev.chefBio || "",
-            culinaryStyle: ev.chefStyle || "",
-            imageUrl: null,
-            verified: false,
-            pastEventsCount: 0,
-            socialLinks: {
-              instagram: null,
-              website: null,
-              twitter: null,
-            },
-          },
-          host: ev.hostName ? {
-            id: `ai-host-${Date.now()}-${i}`,
-            name: ev.hostName,
-            bio: ev.hostBio || "",
-            role: ev.hostRole || "Host",
-          } : null,
-          venue: {
-            id: `ai-venue-${Date.now()}-${i}`,
-            name: ev.venueName,
-            description: ev.venueDescription || "",
-            fullAddress: ev.venueAddress || "",
-            capacity: 20,
-            images: [],
-            atmosphere: [],
-          },
-        }));
+        // Fetch all chefs from database to match images
+        const allDbChefs = await db.select().from(chefs);
+        
+        // Helper function to find matching chef from database
+        const findMatchingDbChef = (chefName: string) => {
+          if (!chefName) return null;
+          const normalized = chefName.toLowerCase().replace(/^chef\s+/i, '').trim();
+          const firstName = normalized.split(' ')[0];
+          
+          // Exact match (ignoring "Chef" prefix)
+          for (const chef of allDbChefs) {
+            const dbNormalized = chef.name.toLowerCase().replace(/^chef\s+/i, '').trim();
+            if (dbNormalized === normalized) return chef;
+          }
+          
+          // First name match
+          for (const chef of allDbChefs) {
+            const dbNormalized = chef.name.toLowerCase().replace(/^chef\s+/i, '').trim();
+            const dbFirstName = dbNormalized.split(' ')[0];
+            if (dbFirstName === firstName && firstName.length >= 3) return chef;
+          }
+          
+          return null;
+        };
 
-        const enhancedCachedEvents = cachedEvents.map((ev: any, i: number) => ({
-          id: `cached-event-${ev.id || i}`,
-          title: ev.title,
-          description: ev.description || "",
-          date: ev.date || "Coming Soon",
-          time: ev.time || "7:00 PM",
-          price: ev.price || 150,
-          totalSeats: 12,
-          availableSeats: 8,
-          category: ev.category || "Private Dining",
-          menuHighlights: ev.menuHighlights || [],
-          imageUrl: null,
-          sourceUrl: ev.sourceUrl || null,
-          isAiGenerated: true,
-          chef: {
-            id: `cached-chef-${ev.id || i}`,
-            name: ev.chefName || "Featured Chef",
-            bio: ev.chefBio || "",
-            culinaryStyle: ev.chefStyle || "",
+        const enhancedFreshEvents = validAiEvents.map((ev: any, i: number) => {
+          const matchedChef = findMatchingDbChef(ev.chefName);
+          return {
+            id: `ai-event-${Date.now()}-${i}`,
+            title: ev.title,
+            description: ev.description || "",
+            date: ev.date || "Coming Soon",
+            time: ev.time || "7:00 PM",
+            price: ev.price || 150,
+            totalSeats: ev.totalSeats || 12,
+            availableSeats: ev.availableSeats || 8,
+            category: ev.category || "Private Dining",
+            menuHighlights: ev.menuHighlights || [],
+            imageUrl: ev.imageUrl || null,
+            sourceUrl: ev.sourceUrl || null,
+            isAiGenerated: true,
+            chef: matchedChef ? {
+              id: matchedChef.id,
+              name: matchedChef.name,
+              bio: matchedChef.bio || ev.chefBio || "",
+              culinaryStyle: matchedChef.culinaryStyle || ev.chefStyle || "",
+              imageUrl: matchedChef.imageUrl || null,
+              verified: matchedChef.verified || false,
+              pastEventsCount: matchedChef.pastEventsCount || 0,
+              socialLinks: matchedChef.socialLinks || { instagram: null, website: null, twitter: null },
+            } : {
+              id: `ai-chef-${Date.now()}-${i}`,
+              name: ev.chefName || "Featured Chef",
+              bio: ev.chefBio || "",
+              culinaryStyle: ev.chefStyle || "",
+              imageUrl: null,
+              verified: false,
+              pastEventsCount: 0,
+              socialLinks: { instagram: null, website: null, twitter: null },
+            },
+            host: ev.hostName ? {
+              id: `ai-host-${Date.now()}-${i}`,
+              name: ev.hostName,
+              bio: ev.hostBio || "",
+              role: ev.hostRole || "Host",
+            } : null,
+            venue: {
+              id: `ai-venue-${Date.now()}-${i}`,
+              name: ev.venueName,
+              description: ev.venueDescription || "",
+              fullAddress: ev.venueAddress || "",
+              capacity: 20,
+              images: [],
+              atmosphere: [],
+            },
+          };
+        });
+
+        const enhancedCachedEvents = cachedEvents.map((ev: any, i: number) => {
+          const matchedChef = findMatchingDbChef(ev.chefName);
+          return {
+            id: `cached-event-${ev.id || i}`,
+            title: ev.title,
+            description: ev.description || "",
+            date: ev.date || "Coming Soon",
+            time: ev.time || "7:00 PM",
+            price: ev.price || 150,
+            totalSeats: 12,
+            availableSeats: 8,
+            category: ev.category || "Private Dining",
+            menuHighlights: ev.menuHighlights || [],
             imageUrl: null,
-            verified: false,
-            pastEventsCount: 0,
-            socialLinks: { instagram: null, website: null, twitter: null },
-          },
-          host: ev.hostName ? {
-            id: `cached-host-${ev.id || i}`,
-            name: ev.hostName,
-            bio: ev.hostBio || "",
-            role: ev.hostRole || "Host",
-          } : null,
-          venue: {
-            id: `cached-venue-${ev.id || i}`,
-            name: ev.venueName || "Venue",
-            description: ev.venueDescription || "",
-            fullAddress: ev.venueAddress || "",
-            capacity: 20,
-            images: [],
-            atmosphere: [],
-          },
-        }));
+            sourceUrl: ev.sourceUrl || null,
+            isAiGenerated: true,
+            chef: matchedChef ? {
+              id: matchedChef.id,
+              name: matchedChef.name,
+              bio: matchedChef.bio || ev.chefBio || "",
+              culinaryStyle: matchedChef.culinaryStyle || ev.chefStyle || "",
+              imageUrl: matchedChef.imageUrl || null,
+              verified: matchedChef.verified || false,
+              pastEventsCount: matchedChef.pastEventsCount || 0,
+              socialLinks: matchedChef.socialLinks || { instagram: null, website: null, twitter: null },
+            } : {
+              id: `cached-chef-${ev.id || i}`,
+              name: ev.chefName || "Featured Chef",
+              bio: ev.chefBio || "",
+              culinaryStyle: ev.chefStyle || "",
+              imageUrl: null,
+              verified: false,
+              pastEventsCount: 0,
+              socialLinks: { instagram: null, website: null, twitter: null },
+            },
+            host: ev.hostName ? {
+              id: `cached-host-${ev.id || i}`,
+              name: ev.hostName,
+              bio: ev.hostBio || "",
+              role: ev.hostRole || "Host",
+            } : null,
+            venue: {
+              id: `cached-venue-${ev.id || i}`,
+              name: ev.venueName || "Venue",
+              description: ev.venueDescription || "",
+              fullAddress: ev.venueAddress || "",
+              capacity: 20,
+              images: [],
+              atmosphere: [],
+            },
+          };
+        });
 
         // Filter out closed venues from cached events too
         const validCachedEvents = enhancedCachedEvents.filter((ev: any) => !isClosedVenue(ev.venue?.name));
