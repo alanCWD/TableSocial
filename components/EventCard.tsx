@@ -13,6 +13,25 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
   const venueName = event.venue?.name || "Private Venue";
   const venueAddress = event.venue?.fullAddress || "";
   const isAi = (event as any).isAiGenerated;
+  const sourceUrl = (event as any).sourceUrl || ((event as any).sourceUrls?.[0]);
+  
+  const getSourceLabel = (url: string) => {
+    try {
+      const hostname = new URL(url).hostname.toLowerCase().replace('www.', '');
+      if (hostname.includes('tock') || hostname.includes('exploretock')) return 'Tock';
+      if (hostname.includes('instagram')) return 'Instagram';
+      if (hostname.includes('eventbrite')) return 'Eventbrite';
+      if (hostname.includes('showpass')) return 'Showpass';
+      if (hostname.includes('hobfinefoods') || hostname.includes('hob')) return 'HOB Fine Foods';
+      if (hostname.includes('vertexaisearch') || hostname.includes('google')) return 'Source';
+      if (hostname.includes('facebook')) return 'Facebook';
+      if (hostname.includes('twitter') || hostname.includes('x.com')) return 'X';
+      const baseName = hostname.split('.')[0];
+      return baseName.charAt(0).toUpperCase() + baseName.slice(1);
+    } catch {
+      return 'Source';
+    }
+  };
   
   return (
     <div 
@@ -87,6 +106,23 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
             </span>
           ))}
         </div>
+
+        {sourceUrl && (
+          <div className="mb-4">
+            <a
+              href={sourceUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1.5 text-[11px] text-gray-400 border border-gray-200 px-3 py-1.5 rounded-full hover:border-gray-300 hover:text-gray-500 transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+              {getSourceLabel(sourceUrl)}
+            </a>
+          </div>
+        )}
 
         <button className="w-full border border-culinary text-culinary py-2.5 rounded-xl font-bold text-sm group-hover:bg-culinary group-hover:text-white transition-all shadow-sm">
           Experience Details

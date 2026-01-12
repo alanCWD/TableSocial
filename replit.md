@@ -135,6 +135,8 @@ The For Chefs page (`/for-chefs`) fetches chef data from the database API (`GET 
 
 ## Recent Changes (January 2026)
 
+- Added source link buttons to EventCard showing where events were discovered (Tock, Instagram, Showpass, etc.)
+- Connected AI-discovered events to database chef records for profile images
 - Unified chef data system: For Chefs page now uses database API instead of static file
 - Standardized chef naming with "Chef" prefix across all systems
 - Improved AI ingestion chef matching to prevent duplicates
