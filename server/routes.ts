@@ -622,6 +622,8 @@ export function registerApiRoutes(app: Express): void {
       const today = new Date();
       const CACHE_HOURS = 6;
       
+      const searchCityLower = location.split(",")[0].trim().toLowerCase();
+      
       let eventsWithRelations: any[] = [];
       try {
         const dbEvents = await db
@@ -630,8 +632,15 @@ export function registerApiRoutes(app: Express): void {
           .where(eq(events.status, "published"))
           .orderBy(desc(events.createdAt));
         
+        // Filter events by location (city match)
+        const locationFilteredEvents = dbEvents.filter(event => {
+          if (!event.location) return false;
+          const eventCity = event.location.split(",")[0].trim().toLowerCase();
+          return eventCity === searchCityLower || event.location.toLowerCase().includes(searchCityLower);
+        });
+        
         eventsWithRelations = await Promise.all(
-          dbEvents.map(async (event) => {
+          locationFilteredEvents.map(async (event) => {
             const chef = event.chefId
               ? (await db.select().from(chefs).where(eq(chefs.id, event.chefId)))[0]
               : null;
@@ -641,10 +650,13 @@ export function registerApiRoutes(app: Express): void {
             return { ...event, chef, venue };
           })
         );
+        
+        console.log(`Found ${eventsWithRelations.length} published events for ${searchCityLower}`);
       } catch (dbError) {
         console.error("Database error in discover:", dbError);
       }
 
+      // Only skip AI discovery if we have enough events for THIS location
       if (eventsWithRelations.length >= 3) {
         return res.json({ events: eventsWithRelations, sources: [] });
       }
