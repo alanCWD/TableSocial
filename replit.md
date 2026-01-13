@@ -79,6 +79,10 @@ Examples:
 
 - `GEMINI_API_KEY`: Required for AI-powered event discovery
 - `DATABASE_URL`: PostgreSQL connection string
+- `INSTAGRAM_ACCESS_TOKEN`: Long-lived User Access Token for Instagram Graph API (requires instagram_basic permissions)
+- `INSTAGRAM_BUSINESS_ACCOUNT_ID`: Instagram Business Account ID
+- `FACEBOOK_APP_ID`: Facebook App ID
+- `FACEBOOK_APP_SECRET`: Facebook App Secret
 
 ## Development
 
@@ -133,8 +137,29 @@ The For Chefs page (`/for-chefs`) fetches chef data from the database API (`GET 
 - Single source of truth for chef data
 - Consistent display across all pages
 
+## Instagram Event Discovery
+
+The app can discover private dining events from Instagram posts using the Instagram Graph API:
+
+- **Service**: `server/services/instagramDiscovery.ts`
+- **Hashtags searched**: #limitedseats, #popupdinner, #privatechef, #chefstable, #secretsupper
+- **Behavior**:
+  - Searches Instagram hashtags for dining-related posts
+  - Uses Gemini AI to parse captions and extract event details (date, venue, chef, price)
+  - Merges Instagram events with web search results and database events
+  - Filters by location relevance
+  - Persists valid events to database as drafts
+
+**Token Requirements**:
+- INSTAGRAM_ACCESS_TOKEN must be a **User Access Token** (not an App Access Token)
+- Generate via Facebook Login OAuth flow or Graph API Explorer
+- Requires permissions: `instagram_basic`, `pages_show_list`
+
+**Admin Endpoint**: `GET /api/admin/instagram-test` - Tests Instagram API connection
+
 ## Recent Changes (January 2026)
 
+- Integrated Instagram Graph API for event discovery from dining hashtags
 - Added source link buttons to EventCard showing where events were discovered (Tock, Instagram, Showpass, etc.)
 - Connected AI-discovered events to database chef records for profile images
 - Unified chef data system: For Chefs page now uses database API instead of static file

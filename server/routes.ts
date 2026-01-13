@@ -6,6 +6,7 @@ import { isAuthenticated } from "./replit_integrations/auth/index.js";
 import { GoogleGenAI, Type } from "@google/genai";
 import { generateSlug, generateEventJsonLd, generateChefJsonLd } from "./utils/slug.js";
 import { persistAiDiscoveries } from "./services/aiIngestion.js";
+import { searchInstagramHashtags, testInstagramConnection } from "./services/instagramDiscovery.js";
 
 // Known closed venues that should be rejected (exact match on full name or word boundaries)
 const CLOSED_VENUES = [
@@ -604,6 +605,16 @@ export function registerApiRoutes(app: Express): void {
     }
   });
 
+  // Test Instagram API connection
+  app.get("/api/admin/instagram-test", isAuthenticated, async (req, res) => {
+    try {
+      const result = await testInstagramConnection();
+      res.json(result);
+    } catch (error: any) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  });
+
   app.get("/api/discover", async (req, res) => {
     try {
       const location = (req.query.location as string) || "Victoria, BC";
@@ -1027,6 +1038,33 @@ Important:
         // Filter out closed venues from cached events too
         const validCachedEvents = enhancedCachedEvents.filter((ev: any) => !isClosedVenue(ev.venue?.name));
         
+        // Trigger Instagram discovery asynchronously (doesn't block response)
+        // Results will be persisted to database for future requests
+        searchInstagramHashtags(location).then(igEvents => {
+          if (igEvents.length > 0) {
+            console.log(`Instagram async discovery found ${igEvents.length} events, persisting...`);
+            const igEventsForPersistence = igEvents.map((ev: any) => ({
+              title: ev.title,
+              description: ev.description,
+              date: ev.date,
+              time: ev.time,
+              price: ev.price,
+              category: ev.category,
+              sourceUrl: ev.sourceUrl,
+              chefName: ev.chefName,
+              venueName: ev.venueName,
+              venueAddress: ev.venueAddress,
+              venueCity: ev.venueCity,
+              menuHighlights: ev.menuHighlights,
+            }));
+            persistAiDiscoveries(igEventsForPersistence, location).catch(err => {
+              console.error("Error persisting Instagram discoveries:", err);
+            });
+          }
+        }).catch(err => {
+          console.error("Instagram async discovery error:", err);
+        });
+
         const allAiEvents = [...enhancedFreshEvents, ...validCachedEvents];
         
         // Use smart deduplication with brand/venue/date matching
