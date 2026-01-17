@@ -158,7 +158,7 @@ const App: React.FC = () => {
         return (
           <>
             {/* Hero Section */}
-            <section className="relative h-[65vh] flex items-center justify-center overflow-hidden bg-culinary">
+            <section className="relative min-h-[85vh] md:h-[65vh] flex items-center justify-center overflow-hidden bg-culinary py-12 md:py-0">
               <div className="absolute inset-0 z-0 scale-105">
                 <img 
                   src="https://images.unsplash.com/photo-1543007630-9710e4a00a20?auto=format&fit=crop&q=80&w=2000" 
@@ -167,12 +167,12 @@ const App: React.FC = () => {
                 />
               </div>
               
-              <div className="relative z-10 w-full max-w-4xl px-6 text-center pt-16 md:pt-0">
+              <div className="relative z-10 w-full max-w-4xl px-6 text-center">
                 <span className="text-accent font-bold uppercase tracking-[0.3em] text-xs mb-4 block animate-in fade-in duration-1000">Exclusive Table Access</span>
-                <h1 className="text-5xl md:text-7xl text-white font-serif font-bold mb-8 leading-[1.1] animate-in slide-in-from-bottom-8 duration-1000">
+                <h1 className="text-4xl md:text-7xl text-white font-serif font-bold mb-6 md:mb-8 leading-[1.1] animate-in slide-in-from-bottom-8 duration-1000">
                   Dine with <span className="text-accent italic">Intention</span>, Not Just Appetite.
                 </h1>
-                <p className="text-gray-300 text-lg md:text-xl mb-12 font-light tracking-wide max-w-2xl mx-auto leading-relaxed animate-in slide-in-from-bottom duration-1000 delay-200">
+                <p className="text-gray-300 text-base md:text-xl mb-8 md:mb-12 font-light tracking-wide max-w-2xl mx-auto leading-relaxed animate-in slide-in-from-bottom duration-1000 delay-200">
                   Join a collective of culinary seekers at secret pop-ups and chef's tables in {search.query}.
                 </p>
 
