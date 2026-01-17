@@ -167,7 +167,7 @@ const App: React.FC = () => {
                 />
               </div>
               
-              <div className="relative z-10 w-full max-w-4xl px-6 text-center">
+              <div className="relative z-10 w-full max-w-4xl px-6 text-center pt-16 md:pt-0">
                 <span className="text-accent font-bold uppercase tracking-[0.3em] text-xs mb-4 block animate-in fade-in duration-1000">Exclusive Table Access</span>
                 <h1 className="text-5xl md:text-7xl text-white font-serif font-bold mb-8 leading-[1.1] animate-in slide-in-from-bottom-8 duration-1000">
                   Dine with <span className="text-accent italic">Intention</span>, Not Just Appetite.
