@@ -100,16 +100,39 @@ npm run build
 
 ## SEO-Friendly Pages
 
-Individual chef and event pages with SEO-friendly URLs and Schema.org JSON-LD structured data:
+Individual chef, host, and event pages with SEO-friendly URLs and Schema.org JSON-LD structured data:
 
 - `/chef/:slug` - Chef profile pages with Person schema (includes jobTitle, workLocation, sameAs)
+- `/host/:slug` - Drink specialist profile pages with Person schema (includes role, specialty)
 - `/event/:slug` - Event detail pages with FoodEvent schema (includes offers, location, performer)
 
 API endpoints:
 - `GET /api/chef/:slug` - Returns chef data with upcoming events and JSON-LD
+- `GET /api/host/:slug` - Returns host data with related events and JSON-LD
 - `GET /api/event/:slug` - Returns event data with chef/venue details and JSON-LD
 
-Auto-slug generation: Slugs are auto-generated from titles when chefs/events are created via admin.
+Auto-slug generation: Slugs are auto-generated from titles when chefs/hosts/events are created via admin.
+
+## Drink Specialists (Hosts)
+
+The app supports drink specialists (sommeliers, mixologists, whisky ambassadors, etc.) with dedicated profiles:
+
+- **Database Table**: `hosts` with role enum (sommelier, mixologist, whisky_ambassador, wine_director, beverage_director, bartender, other)
+- **Events Link**: Events can have a `hostId` to associate drink specialists
+- **Profile Pages**: `/host/:slug` for individual host profiles with JSON-LD
+- **Navigation**: "For Drink Specialists" tab in main navigation
+- **Admin Management**: Full CRUD via HostManager component
+
+Host roles supported:
+- Sommelier
+- Mixologist
+- Whisky Ambassador
+- Wine Director
+- Beverage Director
+- Bartender
+- Other (custom roleTitle)
+
+AI Ingestion automatically detects host roles from discovered event data and creates host records.
 
 ## AI Auto-Ingestion
 
@@ -159,6 +182,11 @@ The app can discover private dining events from Instagram posts using the Instag
 
 ## Recent Changes (January 2026)
 
+- **NEW**: Added complete "For Drink Specialists" feature with hosts database table
+- **NEW**: Created HostPage, HostCard, ForDrinkSpecialists, and HostManager components
+- **NEW**: Added /host/:slug routing with SEO-friendly profile pages
+- **NEW**: EventCard now displays both chef and host with visual distinction (purple accent for hosts)
+- **NEW**: AI ingestion auto-creates host records from discovered events with role detection
 - Integrated Instagram Graph API for event discovery from dining hashtags
 - Added source link buttons to EventCard showing where events were discovered (Tock, Instagram, Showpass, etc.)
 - Connected AI-discovered events to database chef records for profile images
