@@ -2,8 +2,8 @@ import React from 'react';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
-  activeTab: 'events' | 'chefs' | 'venues' | 'ai-queue';
-  onTabChange: (tab: 'events' | 'chefs' | 'venues' | 'ai-queue') => void;
+  activeTab: 'events' | 'chefs' | 'hosts' | 'venues' | 'ai-queue';
+  onTabChange: (tab: 'events' | 'chefs' | 'hosts' | 'venues' | 'ai-queue') => void;
   onLogout: () => void;
   onBack: () => void;
 }
@@ -18,6 +18,7 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
   const tabs = [
     { id: 'events' as const, label: 'Events', icon: '📅' },
     { id: 'chefs' as const, label: 'Chefs', icon: '👨‍🍳' },
+    { id: 'hosts' as const, label: 'Drink Specialists', icon: '🍷' },
     { id: 'venues' as const, label: 'Venues', icon: '🏠' },
     { id: 'ai-queue' as const, label: 'AI Queue', icon: '🤖' },
   ];

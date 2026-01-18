@@ -9,7 +9,7 @@ interface User {
 
 interface LayoutProps {
   children: React.ReactNode;
-  onNavigate: (page: 'explore' | 'how-it-works' | 'for-chefs' | 'admin') => void;
+  onNavigate: (page: 'explore' | 'how-it-works' | 'for-chefs' | 'for-drink-specialists' | 'admin') => void;
   currentPage: string;
   user?: User | null;
   onSignIn?: () => void;
@@ -53,6 +53,12 @@ export const Layout: React.FC<LayoutProps> = ({
             className={`${currentPage === 'for-chefs' ? 'text-accent' : 'text-gray-400'} hover:text-accent transition-colors`}
           >
             For Chefs
+          </button>
+          <button 
+            onClick={() => onNavigate('for-drink-specialists')} 
+            className={`${currentPage === 'for-drink-specialists' ? 'text-accent' : 'text-gray-400'} hover:text-accent transition-colors`}
+          >
+            For Drink Specialists
           </button>
         </nav>
         <div className="flex items-center gap-4">

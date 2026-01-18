@@ -18,6 +18,21 @@ export interface Chef {
   region?: string;
 }
 
+export interface Host {
+  id: string;
+  name: string;
+  slug?: string | null;
+  bio: string;
+  specialty: string;
+  role: 'sommelier' | 'mixologist' | 'whisky_ambassador' | 'wine_director' | 'beverage_director' | 'bartender' | 'other';
+  roleTitle: string;
+  imageUrl: string;
+  socialLinks: SocialLinks;
+  pastEventsCount: number;
+  verified?: boolean;
+  region?: string;
+}
+
 export interface Venue {
   id: string;
   name: string;
@@ -32,6 +47,7 @@ export interface DiningEvent {
   id: string;
   title: string;
   chef: Chef | null;
+  host: Host | null;
   venue: Venue | null;
   date: string;
   time: string;

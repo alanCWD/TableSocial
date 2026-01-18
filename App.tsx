@@ -6,15 +6,17 @@ import { EventModal } from './components/EventModal';
 import { ProfileOverlay } from './components/ProfileOverlay';
 import { ChefCard } from './components/ChefCard';
 import { ForChefs } from './components/ForChefs';
+import { ForDrinkSpecialists } from './components/ForDrinkSpecialists';
 import { HowItWorks } from './components/HowItWorks';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { ChefPage } from './components/ChefPage';
 import { EventPage } from './components/EventPage';
-import { DiningEvent, SearchState, Chef, Venue } from './types';
+import { HostPage } from './components/HostPage';
+import { DiningEvent, SearchState, Chef, Venue, Host } from './types';
 import { fetchDiningEvents } from './services/geminiService';
 
-type Page = 'explore' | 'how-it-works' | 'for-chefs' | 'admin';
-type RouteType = { type: 'page'; page: Page } | { type: 'chef'; slug: string } | { type: 'event'; slug: string };
+type Page = 'explore' | 'how-it-works' | 'for-chefs' | 'for-drink-specialists' | 'admin';
+type RouteType = { type: 'page'; page: Page } | { type: 'chef'; slug: string } | { type: 'event'; slug: string } | { type: 'host'; slug: string };
 
 function parseRoute(): RouteType {
   const path = window.location.pathname;
@@ -25,6 +27,10 @@ function parseRoute(): RouteType {
   if (path.startsWith('/event/')) {
     const slug = path.replace('/event/', '');
     return { type: 'event', slug };
+  }
+  if (path.startsWith('/host/')) {
+    const slug = path.replace('/host/', '');
+    return { type: 'host', slug };
   }
   return { type: 'page', page: 'explore' };
 }
@@ -153,6 +159,8 @@ const App: React.FC = () => {
         return <HowItWorks />;
       case 'for-chefs':
         return <ForChefs onChefClick={setSelectedChef} />;
+      case 'for-drink-specialists':
+        return <ForDrinkSpecialists onHostClick={(host) => host.slug && navigateTo(`/host/${host.slug}`)} />;
       case 'explore':
       default:
         return (
@@ -303,6 +311,16 @@ const App: React.FC = () => {
         slug={route.slug}
         onBack={goHome}
         onChefClick={(slug) => navigateTo(`/chef/${slug}`)}
+      />
+    );
+  }
+
+  if (route.type === 'host') {
+    return (
+      <HostPage
+        slug={route.slug}
+        onBack={goHome}
+        onEventClick={(slug) => navigateTo(`/event/${slug}`)}
       />
     );
   }

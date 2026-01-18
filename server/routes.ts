@@ -1,10 +1,10 @@
 import type { Express } from "express";
 import { db } from "./db.js";
-import { chefs, events, venues, aiIngestions, cachedAiEvents } from "../shared/schema.js";
+import { chefs, hosts, events, venues, aiIngestions, cachedAiEvents } from "../shared/schema.js";
 import { eq, and, gte, desc, lt } from "drizzle-orm";
 import { isAuthenticated } from "./replit_integrations/auth/index.js";
 import { GoogleGenAI, Type } from "@google/genai";
-import { generateSlug, generateEventJsonLd, generateChefJsonLd } from "./utils/slug.js";
+import { generateSlug, generateEventJsonLd, generateChefJsonLd, generateHostJsonLd } from "./utils/slug.js";
 import { persistAiDiscoveries } from "./services/aiIngestion.js";
 import { searchInstagramHashtags, testInstagramConnection } from "./services/instagramDiscovery.js";
 
@@ -410,6 +410,96 @@ export function registerApiRoutes(app: Express): void {
     } catch (error) {
       console.error("Error deleting chef:", error);
       res.status(500).json({ error: "Failed to delete chef" });
+    }
+  });
+
+  // Hosts (Drink Specialists) Routes
+  app.get("/api/hosts", async (req, res) => {
+    try {
+      const allHosts = await db.select().from(hosts).orderBy(desc(hosts.createdAt));
+      res.json(allHosts);
+    } catch (error) {
+      console.error("Error fetching hosts:", error);
+      res.status(500).json({ error: "Failed to fetch hosts" });
+    }
+  });
+
+  app.get("/api/hosts/:id", async (req, res) => {
+    try {
+      const [host] = await db.select().from(hosts).where(eq(hosts.id, req.params.id));
+      if (!host) {
+        return res.status(404).json({ error: "Host not found" });
+      }
+      res.json(host);
+    } catch (error) {
+      console.error("Error fetching host:", error);
+      res.status(500).json({ error: "Failed to fetch host" });
+    }
+  });
+
+  app.get("/api/host/:slug", async (req, res) => {
+    try {
+      const [host] = await db.select().from(hosts).where(eq(hosts.slug, req.params.slug));
+      if (!host) {
+        return res.status(404).json({ error: "Host not found" });
+      }
+      const hostEvents = await db.select().from(events)
+        .where(and(eq(events.hostId, host.id), eq(events.status, "published")))
+        .orderBy(desc(events.date));
+      const jsonLd = generateHostJsonLd(host);
+      res.json({ ...host, events: hostEvents, jsonLd });
+    } catch (error) {
+      console.error("Error fetching host by slug:", error);
+      res.status(500).json({ error: "Failed to fetch host" });
+    }
+  });
+
+  app.post("/api/admin/hosts", isAuthenticated, async (req, res) => {
+    try {
+      const slug = req.body.slug || generateSlug(req.body.name);
+      const [host] = await db.insert(hosts).values({ ...req.body, slug }).returning();
+      res.json(host);
+    } catch (error) {
+      console.error("Error creating host:", error);
+      res.status(500).json({ error: "Failed to create host" });
+    }
+  });
+
+  app.put("/api/admin/hosts/:id", isAuthenticated, async (req, res) => {
+    try {
+      const updateData = { ...req.body, updatedAt: new Date() };
+      if (updateData.publishedAt && typeof updateData.publishedAt === 'string') {
+        updateData.publishedAt = new Date(updateData.publishedAt);
+      }
+      const [host] = await db
+        .update(hosts)
+        .set(updateData)
+        .where(eq(hosts.id, req.params.id))
+        .returning();
+      res.json(host);
+    } catch (error) {
+      console.error("Error updating host:", error);
+      res.status(500).json({ error: "Failed to update host" });
+    }
+  });
+
+  app.delete("/api/admin/hosts/:id", isAuthenticated, async (req, res) => {
+    try {
+      await db.delete(hosts).where(eq(hosts.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting host:", error);
+      res.status(500).json({ error: "Failed to delete host" });
+    }
+  });
+
+  app.get("/api/admin/hosts", isAuthenticated, async (req, res) => {
+    try {
+      const allHosts = await db.select().from(hosts).orderBy(desc(hosts.createdAt));
+      res.json(allHosts);
+    } catch (error) {
+      console.error("Error fetching hosts:", error);
+      res.status(500).json({ error: "Failed to fetch hosts" });
     }
   });
 

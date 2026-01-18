@@ -2,10 +2,11 @@ import React, { useState } from 'react';
 import { AdminLayout } from './AdminLayout';
 import { EventManager } from './EventManager';
 import { ChefManager } from './ChefManager';
+import { HostManager } from './HostManager';
 import { VenueManager } from './VenueManager';
 import { AIQueue } from './AIQueue';
 
-type AdminTab = 'events' | 'chefs' | 'venues' | 'ai-queue';
+type AdminTab = 'events' | 'chefs' | 'hosts' | 'venues' | 'ai-queue';
 
 interface AdminDashboardProps {
   onLogout: () => void;
@@ -21,6 +22,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ onLogout, onBack
         return <EventManager />;
       case 'chefs':
         return <ChefManager />;
+      case 'hosts':
+        return <HostManager />;
       case 'venues':
         return <VenueManager />;
       case 'ai-queue':

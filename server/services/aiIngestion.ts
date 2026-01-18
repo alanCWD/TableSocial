@@ -1,5 +1,5 @@
 import { db } from "../db.js";
-import { chefs, venues, events, type InsertChef, type InsertVenue, type InsertEvent } from "../../shared/schema.js";
+import { chefs, hosts, venues, events, type InsertChef, type InsertHost, type InsertVenue, type InsertEvent } from "../../shared/schema.js";
 import { generateSlug } from "../utils/slug.js";
 import { eq, ilike, and, or, sql } from "drizzle-orm";
 
@@ -38,6 +38,25 @@ function normalizeVenueName(name: string): string {
     .replace(/\s+(restaurant|bar|lounge|cafe|bistro)$/i, '')
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+function normalizeHostName(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function detectHostRole(roleText: string | undefined): 'sommelier' | 'mixologist' | 'whisky_ambassador' | 'wine_director' | 'beverage_director' | 'bartender' | 'other' {
+  if (!roleText) return 'other';
+  const role = roleText.toLowerCase();
+  if (role.includes('sommelier')) return 'sommelier';
+  if (role.includes('mixologist')) return 'mixologist';
+  if (role.includes('whisky') || role.includes('whiskey') || role.includes('ambassador')) return 'whisky_ambassador';
+  if (role.includes('wine') && role.includes('director')) return 'wine_director';
+  if (role.includes('beverage') && role.includes('director')) return 'beverage_director';
+  if (role.includes('bartender')) return 'bartender';
+  return 'other';
 }
 
 async function findOrCreateChef(name: string, bio?: string, style?: string, region?: string): Promise<string> {
@@ -134,6 +153,50 @@ async function findOrCreateVenue(name: string, address?: string, city?: string, 
   return created.id;
 }
 
+async function findOrCreateHost(name: string, bio?: string, roleText?: string, region?: string): Promise<string> {
+  const rawName = name.trim();
+  const normalizedName = normalizeHostName(rawName);
+  const slug = generateSlug(rawName);
+  const role = detectHostRole(roleText);
+  
+  const existing = await db.select({ id: hosts.id, name: hosts.name }).from(hosts).where(
+    or(
+      eq(hosts.slug, slug),
+      ilike(hosts.name, rawName),
+      sql`LOWER(${hosts.name}) = ${normalizedName}`
+    )
+  ).limit(1);
+  
+  if (existing.length > 0) {
+    console.log(`Found existing host match: "${rawName}" → "${existing[0].name}"`);
+    return existing[0].id;
+  }
+  
+  let uniqueSlug = slug;
+  let counter = 1;
+  while (true) {
+    const [slugExists] = await db.select({ id: hosts.id }).from(hosts).where(eq(hosts.slug, uniqueSlug)).limit(1);
+    if (!slugExists) break;
+    uniqueSlug = `${slug}-${counter}`;
+    counter++;
+  }
+  
+  const newHost: InsertHost = {
+    name: rawName,
+    slug: uniqueSlug,
+    bio: bio || null,
+    role: role,
+    roleTitle: roleText || null,
+    specialty: null,
+    region: region || null,
+    verified: false,
+  };
+  
+  const [createdHost] = await db.insert(hosts).values(newHost).returning({ id: hosts.id });
+  console.log(`Created new host: ${rawName} (${createdHost.id})`);
+  return createdHost.id;
+}
+
 async function eventExists(slug: string, chefId?: string | null, date?: string): Promise<boolean> {
   const [bySlug] = await db.select({ id: events.id }).from(events).where(eq(events.slug, slug)).limit(1);
   if (bySlug) return true;
@@ -148,18 +211,21 @@ async function eventExists(slug: string, chefId?: string | null, date?: string):
   return false;
 }
 
-export async function persistAiDiscoveries(discoveredEvents: AiDiscoveredEvent[], location: string): Promise<{ chefsCreated: number; venuesCreated: number; eventsCreated: number }> {
+export async function persistAiDiscoveries(discoveredEvents: AiDiscoveredEvent[], location: string): Promise<{ chefsCreated: number; venuesCreated: number; hostsCreated: number; eventsCreated: number }> {
   let chefsCreated = 0;
   let venuesCreated = 0;
+  let hostsCreated = 0;
   let eventsCreated = 0;
   
   const chefCache = new Map<string, string>();
   const venueCache = new Map<string, string>();
+  const hostCache = new Map<string, string>();
   
   for (const aiEvent of discoveredEvents) {
     try {
       let chefId: string | null = null;
       let venueId: string | null = null;
+      let hostId: string | null = null;
       
       if (aiEvent.chefName && aiEvent.chefName.trim()) {
         const chefKey = normalizeChefName(aiEvent.chefName);
@@ -199,6 +265,25 @@ export async function persistAiDiscoveries(discoveredEvents: AiDiscoveredEvent[]
         }
       }
       
+      if (aiEvent.hostName && aiEvent.hostName.trim()) {
+        const hostKey = normalizeHostName(aiEvent.hostName);
+        
+        if (hostCache.has(hostKey)) {
+          hostId = hostCache.get(hostKey)!;
+        } else {
+          const [existingCount] = await db.select({ count: sql<number>`count(*)` }).from(hosts);
+          hostId = await findOrCreateHost(
+            aiEvent.hostName,
+            aiEvent.hostBio,
+            aiEvent.hostRole,
+            location
+          );
+          const [newCount] = await db.select({ count: sql<number>`count(*)` }).from(hosts);
+          if (Number(newCount.count) > Number(existingCount.count)) hostsCreated++;
+          hostCache.set(hostKey, hostId);
+        }
+      }
+      
       const eventSlug = generateSlug(aiEvent.title, aiEvent.date);
       
       if (await eventExists(eventSlug, chefId, aiEvent.date)) {
@@ -226,6 +311,7 @@ export async function persistAiDiscoveries(discoveredEvents: AiDiscoveredEvent[]
         sourceUrls: aiEvent.sourceUrl ? [aiEvent.sourceUrl] : [],
         chefId,
         venueId,
+        hostId,
         hostName: aiEvent.hostName || null,
         hostBio: aiEvent.hostBio || null,
         hostRole: aiEvent.hostRole || null,
@@ -243,6 +329,6 @@ export async function persistAiDiscoveries(discoveredEvents: AiDiscoveredEvent[]
     }
   }
   
-  console.log(`AI Ingestion complete: ${chefsCreated} chefs, ${venuesCreated} venues, ${eventsCreated} events created`);
-  return { chefsCreated, venuesCreated, eventsCreated };
+  console.log(`AI Ingestion complete: ${chefsCreated} chefs, ${hostsCreated} hosts, ${venuesCreated} venues, ${eventsCreated} events created`);
+  return { chefsCreated, venuesCreated, hostsCreated, eventsCreated };
 }

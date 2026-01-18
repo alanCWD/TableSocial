@@ -10,6 +10,11 @@ interface EventCardProps {
 export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
   const highlights = event.menuHighlights || [];
   const chefName = event.chef?.name || "Guest Chef";
+  const hostData = event.host ? event.host : (event as any).hostName ? {
+    name: (event as any).hostName,
+    roleTitle: (event as any).hostRole,
+    imageUrl: null
+  } : null;
   const venueName = event.venue?.name || "Private Venue";
   const venueAddress = event.venue?.fullAddress || "";
   const isAi = (event as any).isAiGenerated;
@@ -82,6 +87,24 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
             )}
           </div>
         </div>
+        
+        {hostData && hostData.name && (
+          <div className="flex items-center gap-2 mb-3 pl-4 border-l-2 border-purple-200">
+            {(hostData as any).imageUrl && (
+              <img 
+                src={(hostData as any).imageUrl} 
+                alt={hostData.name}
+                className="w-7 h-7 rounded-full object-cover border-2 border-purple-200"
+              />
+            )}
+            <div>
+              <p className="text-purple-600 font-semibold text-xs">{hostData.name}</p>
+              {hostData.roleTitle && (
+                <p className="text-gray-400 text-[10px]">{hostData.roleTitle}</p>
+              )}
+            </div>
+          </div>
+        )}
         
         <div className="flex items-center gap-4 text-xs text-gray-500 mb-4">
           <div className="flex items-center gap-1">

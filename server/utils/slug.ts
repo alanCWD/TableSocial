@@ -168,3 +168,53 @@ export function generateChefJsonLd(chef: {
 
   return jsonLd;
 }
+
+export function generateHostJsonLd(host: {
+  name: string;
+  bio?: string | null;
+  specialty?: string | null;
+  roleTitle?: string | null;
+  imageUrl?: string | null;
+  region?: string | null;
+  socialLinks?: { website?: string; instagram?: string } | null;
+}): object {
+  const jsonLd: any = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": host.name,
+    "jobTitle": host.roleTitle || "Beverage Specialist",
+  };
+
+  if (host.bio) {
+    jsonLd.description = host.bio;
+  }
+
+  if (host.specialty) {
+    jsonLd.knowsAbout = host.specialty;
+  }
+
+  if (host.imageUrl) {
+    jsonLd.image = host.imageUrl;
+  }
+
+  if (host.region) {
+    jsonLd.workLocation = {
+      "@type": "Place",
+      "name": host.region
+    };
+  }
+
+  const sameAs: string[] = [];
+  if (host.socialLinks?.website) {
+    sameAs.push(host.socialLinks.website);
+  }
+  if (host.socialLinks?.instagram) {
+    const insta = host.socialLinks.instagram.replace('@', '');
+    sameAs.push(`https://instagram.com/${insta}`);
+  }
+  if (sameAs.length > 0) {
+    jsonLd.sameAs = sameAs;
+  }
+
+  return jsonLd;
+}

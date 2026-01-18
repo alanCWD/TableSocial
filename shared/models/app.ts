@@ -4,6 +4,7 @@ import { pgTable, varchar, text, integer, timestamp, boolean, jsonb, pgEnum, ind
 export const eventStatusEnum = pgEnum("event_status", ["draft", "published", "archived"]);
 export const eventOriginEnum = pgEnum("event_origin", ["admin", "ai"]);
 export const mediaTypeEnum = pgEnum("media_type", ["image", "video"]);
+export const hostRoleEnum = pgEnum("host_role", ["sommelier", "mixologist", "whisky_ambassador", "wine_director", "beverage_director", "bartender", "other"]);
 
 export const mediaAssets = pgTable("media_assets", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -49,6 +50,32 @@ export const chefs = pgTable("chefs", {
   uniqueIndex("idx_chefs_slug").on(table.slug),
 ]);
 
+export const hosts = pgTable("hosts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: varchar("name", { length: 255 }).notNull(),
+  slug: varchar("slug", { length: 255 }).unique(),
+  role: hostRoleEnum("role").default("other"),
+  roleTitle: varchar("role_title", { length: 100 }),
+  bio: text("bio"),
+  specialty: varchar("specialty", { length: 255 }),
+  region: varchar("region", { length: 255 }),
+  verified: boolean("verified").default(false),
+  socialLinks: jsonb("social_links").$type<{
+    instagram?: string;
+    website?: string;
+    twitter?: string;
+  }>(),
+  imageUrl: varchar("image_url", { length: 1024 }),
+  heroImageId: varchar("hero_image_id").references(() => mediaAssets.id),
+  metaDescription: varchar("meta_description", { length: 320 }),
+  pastEventsCount: integer("past_events_count").default(0),
+  publishedAt: timestamp("published_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => [
+  uniqueIndex("idx_hosts_slug").on(table.slug),
+]);
+
 export const venues = pgTable("venues", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: varchar("name", { length: 255 }).notNull(),
@@ -84,6 +111,7 @@ export const events = pgTable("events", {
   heroImageId: varchar("hero_image_id").references(() => mediaAssets.id),
   sourceUrls: jsonb("source_urls").$type<string[]>().default([]),
   chefId: varchar("chef_id").references(() => chefs.id),
+  hostId: varchar("host_id").references(() => hosts.id),
   hostName: varchar("host_name", { length: 255 }),
   hostBio: text("host_bio"),
   hostRole: varchar("host_role", { length: 100 }),
@@ -141,6 +169,10 @@ export const chefsRelations = relations(chefs, ({ many }) => ({
   events: many(events),
 }));
 
+export const hostsRelations = relations(hosts, ({ many }) => ({
+  events: many(events),
+}));
+
 export const venuesRelations = relations(venues, ({ many }) => ({
   events: many(events),
 }));
@@ -150,6 +182,10 @@ export const eventsRelations = relations(events, ({ one }) => ({
     fields: [events.chefId],
     references: [chefs.id],
   }),
+  host: one(hosts, {
+    fields: [events.hostId],
+    references: [hosts.id],
+  }),
   venue: one(venues, {
     fields: [events.venueId],
     references: [venues.id],
@@ -158,6 +194,8 @@ export const eventsRelations = relations(events, ({ one }) => ({
 
 export type Chef = typeof chefs.$inferSelect;
 export type InsertChef = typeof chefs.$inferInsert;
+export type Host = typeof hosts.$inferSelect;
+export type InsertHost = typeof hosts.$inferInsert;
 export type Venue = typeof venues.$inferSelect;
 export type InsertVenue = typeof venues.$inferInsert;
 export type Event = typeof events.$inferSelect;
