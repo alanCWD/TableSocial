@@ -180,8 +180,20 @@ The app can discover private dining events from Instagram posts using the Instag
 
 **Admin Endpoint**: `GET /api/admin/instagram-test` - Tests Instagram API connection
 
+## Event Recuration
+
+Users can refresh event discovery at any time using the "Refresh Events" button:
+
+- **Force Refresh**: Clicking the button passes `force=true` to the API, bypassing the 3-event cache threshold
+- **Future Events Only**: Past events are automatically filtered from display while remaining in the database
+- **Chronological Sorting**: Events are always sorted by date (earliest first)
+- **Persistence**: All discovered events are saved to the database, including past events for historical records
+
 ## Recent Changes (January 2026)
 
+- **NEW**: Added "Refresh Events" button for on-demand event recuration
+- **NEW**: Past events are hidden from UI while persisted in database
+- **NEW**: Events now sorted chronologically (earliest first)
 - **NEW**: Added complete "For Drink Specialists" feature with hosts database table
 - **NEW**: Created HostPage, HostCard, ForDrinkSpecialists, and HostManager components
 - **NEW**: Added /host/:slug routing with SEO-friendly profile pages
