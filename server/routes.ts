@@ -708,11 +708,24 @@ export function registerApiRoutes(app: Express): void {
   app.get("/api/discover", async (req, res) => {
     try {
       const location = (req.query.location as string) || "Victoria, BC";
+      const forceRecurate = req.query.force === "true";
       const normalizedLocation = location.toLowerCase().trim();
       const today = new Date();
+      today.setHours(0, 0, 0, 0);
       const CACHE_HOURS = 6;
       
       const searchCityLower = location.split(",")[0].trim().toLowerCase();
+      
+      const isEventInFuture = (dateStr: string | null | undefined): boolean => {
+        if (!dateStr) return false;
+        try {
+          const eventDate = new Date(dateStr);
+          eventDate.setHours(0, 0, 0, 0);
+          return !isNaN(eventDate.getTime()) && eventDate >= today;
+        } catch {
+          return false;
+        }
+      };
       
       let eventsWithRelations: any[] = [];
       try {
@@ -722,11 +735,12 @@ export function registerApiRoutes(app: Express): void {
           .where(eq(events.status, "published"))
           .orderBy(desc(events.createdAt));
         
-        // Filter events by location (city match)
+        // Filter events by location (city match) AND future date only
         const locationFilteredEvents = dbEvents.filter(event => {
           if (!event.location) return false;
           const eventCity = event.location.split(",")[0].trim().toLowerCase();
-          return eventCity === searchCityLower || event.location.toLowerCase().includes(searchCityLower);
+          const locationMatch = eventCity === searchCityLower || event.location.toLowerCase().includes(searchCityLower);
+          return locationMatch && isEventInFuture(event.date);
         });
         
         eventsWithRelations = await Promise.all(
@@ -741,14 +755,25 @@ export function registerApiRoutes(app: Express): void {
           })
         );
         
-        console.log(`Found ${eventsWithRelations.length} published events for ${searchCityLower}`);
+        console.log(`Found ${eventsWithRelations.length} future published events for ${searchCityLower}`);
       } catch (dbError) {
         console.error("Database error in discover:", dbError);
       }
 
-      // Only skip AI discovery if we have enough events for THIS location
-      if (eventsWithRelations.length >= 3) {
-        return res.json({ events: eventsWithRelations, sources: [] });
+      // Only skip AI discovery if we have enough events for THIS location (unless force recurate)
+      if (!forceRecurate && eventsWithRelations.length >= 3) {
+        const sortedEvents = eventsWithRelations.sort((a, b) => {
+          try {
+            const dateA = new Date(a.date);
+            const dateB = new Date(b.date);
+            if (isNaN(dateA.getTime())) return 1;
+            if (isNaN(dateB.getTime())) return -1;
+            return dateA.getTime() - dateB.getTime();
+          } catch {
+            return 0;
+          }
+        });
+        return res.json({ events: sortedEvents, sources: [] });
       }
 
       let cachedEvents: any[] = [];
@@ -1202,7 +1227,10 @@ Important:
 
         const combinedEvents = [...eventsWithRelations, ...uniqueAiEvents];
         
-        combinedEvents.sort((a, b) => {
+        // Filter to only future events and sort chronologically
+        const futureEvents = combinedEvents.filter(ev => isEventInFuture(ev.date));
+        
+        futureEvents.sort((a, b) => {
           try {
             const dateA = new Date(a.date);
             const dateB = new Date(b.date);
@@ -1214,7 +1242,7 @@ Important:
           }
         });
         
-        res.json({ events: combinedEvents, sources: [...new Set(sources.map(s => s.uri))].map(uri => sources.find(s => s.uri === uri)!) });
+        res.json({ events: futureEvents, sources: [...new Set(sources.map(s => s.uri))].map(uri => sources.find(s => s.uri === uri)!) });
       } catch (aiError) {
         console.error("AI discovery error:", aiError);
         res.json({ events: eventsWithRelations, sources: [] });

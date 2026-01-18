@@ -114,11 +114,11 @@ const App: React.FC = () => {
     handleSearch('Victoria, BC');
   }, []);
 
-  const handleSearch = async (loc: string) => {
+  const handleSearch = async (loc: string, force: boolean = false) => {
     const currentSearch = ++searchCounterRef.current;
     setSearch(prev => ({ ...prev, isSearching: true, error: null, query: loc }));
     try {
-      const data = await fetchDiningEvents(loc);
+      const data = await fetchDiningEvents(loc, force);
       if (currentSearch !== searchCounterRef.current) return;
       setSearch({
         query: loc,
@@ -137,6 +137,10 @@ const App: React.FC = () => {
         error: "Failed to curate experiences. Please try another city."
       });
     }
+  };
+
+  const handleRecurate = () => {
+    handleSearch(search.query, true);
   };
 
   const onSearchSubmit = (e: React.FormEvent) => {
@@ -217,12 +221,22 @@ const App: React.FC = () => {
                   </h3>
                 </div>
                 
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap gap-3 items-center">
                   {['All Experiences', 'Chef Pairing', 'Pop-up', 'Secret Location'].map((filter) => (
                     <button key={filter} className="px-6 py-3 rounded-xl border border-gray-100 text-xs uppercase tracking-widest font-bold text-gray-400 hover:border-accent hover:text-accent transition-all">
                       {filter}
                     </button>
                   ))}
+                  <button 
+                    onClick={handleRecurate}
+                    disabled={search.isSearching}
+                    className="ml-auto px-6 py-3 rounded-xl bg-accent text-white text-xs uppercase tracking-widest font-bold hover:bg-accent/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <svg className={`w-4 h-4 ${search.isSearching ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Refresh Events
+                  </button>
                 </div>
               </div>
 

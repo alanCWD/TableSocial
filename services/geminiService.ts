@@ -21,9 +21,10 @@ const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<R
   throw new Error('Max retries exceeded');
 };
 
-export const fetchDiningEvents = async (location: string): Promise<{ events: DiningEvent[], sources: GroundingSource[] }> => {
+export const fetchDiningEvents = async (location: string, force: boolean = false): Promise<{ events: DiningEvent[], sources: GroundingSource[] }> => {
   try {
-    const response = await fetchWithRetry(`/api/discover?location=${encodeURIComponent(location)}`);
+    const url = `/api/discover?location=${encodeURIComponent(location)}${force ? '&force=true' : ''}`;
+    const response = await fetchWithRetry(url);
     
     if (!response.ok) {
       throw new Error('Failed to discover events');
