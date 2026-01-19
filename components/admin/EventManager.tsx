@@ -215,6 +215,21 @@ export const EventManager: React.FC = () => {
     );
   };
 
+  const sortedEvents = [...events].sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    try {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      if (isNaN(dateA.getTime())) return 1;
+      if (isNaN(dateB.getTime())) return -1;
+      return dateB.getTime() - dateA.getTime();
+    } catch {
+      return 0;
+    }
+  });
+
   if (loading) {
     return <div className="text-center py-12 text-gray-500">Loading events...</div>;
   }
@@ -456,86 +471,69 @@ export const EventManager: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
         {events.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
             No events yet. Add your first event above.
           </div>
         ) : (
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-100">
-              <tr>
-                <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Event
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Chef
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Date
-                </th>
-                <th className="text-left px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="text-right px-6 py-3 text-xs font-bold text-gray-500 uppercase tracking-wider">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {events.map((event) => (
-                <tr key={event.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {event.imageUrl ? (
-                        <img
-                          src={event.imageUrl}
-                          alt={event.title}
-                          className="w-12 h-12 rounded-lg object-cover"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-lg bg-gray-200 flex items-center justify-center text-gray-400">
-                          📅
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-medium text-culinary">{event.title}</div>
-                        <div className="text-xs text-gray-400">{event.category}</div>
+          <>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm text-gray-500">{sortedEvents.length} events sorted by date (most recent first)</p>
+            </div>
+            <div className="overflow-x-auto pb-4">
+              <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
+                {sortedEvents.map((event) => (
+                  <div
+                    key={event.id}
+                    className="flex-shrink-0 w-72 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 hover:shadow-md transition-shadow"
+                  >
+                    {event.imageUrl ? (
+                      <img
+                        src={event.imageUrl}
+                        alt={event.title}
+                        className="w-full h-36 object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-36 bg-gray-200 flex items-center justify-center text-4xl">
+                        📅
+                      </div>
+                    )}
+                    <div className="p-4">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <h4 className="font-bold text-culinary text-sm line-clamp-2">{event.title}</h4>
+                        {getStatusBadge(event.status)}
+                      </div>
+                      <div className="space-y-1 text-xs text-gray-500 mb-3">
+                        <p className="font-medium text-accent">{event.date || 'No date'}</p>
+                        <p>{event.chef?.name || 'No chef assigned'}</p>
+                        <p className="truncate">{event.location || 'No location'}</p>
+                      </div>
+                      <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                        <button
+                          onClick={() => handleEdit(event)}
+                          className="text-accent hover:underline text-xs font-medium"
+                        >
+                          Edit
+                        </button>
+                        {event.status === 'published' && event.slug && (
+                          <a href={`/event/${event.slug}`} target="_blank" rel="noopener noreferrer" className="text-gray-500 hover:underline text-xs">
+                            View
+                          </a>
+                        )}
+                        <button
+                          onClick={() => handleDelete(event.id)}
+                          className="text-red-500 hover:underline text-xs ml-auto"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">
-                    {event.chef?.name || '—'}
-                  </td>
-                  <td className="px-6 py-4 text-gray-600">{event.date || '—'}</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1">
-                      {getStatusBadge(event.status)}
-                      {event.status === 'published' && event.slug && (
-                        <a href={`/event/${event.slug}`} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline text-xs ml-1">
-                          View
-                        </a>
-                      )}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button
-                      onClick={() => handleEdit(event)}
-                      className="text-accent hover:underline text-sm mr-4"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(event.id)}
-                      className="text-red-500 hover:underline text-sm"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
         )}
       </div>
     </div>
