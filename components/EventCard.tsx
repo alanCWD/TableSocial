@@ -104,7 +104,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
               </div>
             )}
             <div>
-              <p className="text-gray-700 font-semibold text-sm">{hostData.name}</p>
+              <p className="text-purple-600 font-semibold text-sm">{hostData.name}</p>
               <p className="text-gray-400 text-xs">{hostData.roleTitle || 'Pairing Specialist'}</p>
             </div>
           </div>
