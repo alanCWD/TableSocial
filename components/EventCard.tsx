@@ -89,16 +89,23 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
         </div>
         
         {hostData && hostData.name && (
-          <div className="flex items-start gap-2 mb-4 bg-purple-50 rounded-lg p-3">
-            <svg className="w-4 h-4 text-purple-500 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-            </svg>
+          <div className="flex items-center gap-2 mb-3">
+            {hostData.imageUrl ? (
+              <img 
+                src={hostData.imageUrl} 
+                alt={hostData.name}
+                className="w-8 h-8 rounded-full object-cover border-2 border-gray-200"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center border-2 border-gray-200">
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+            )}
             <div>
-              <p className="text-[10px] text-purple-400 uppercase tracking-wide font-medium mb-0.5">Drink Specialist</p>
-              <p className="text-purple-700 font-semibold text-sm">{hostData.name}</p>
-              {hostData.roleTitle && (
-                <p className="text-purple-500 text-xs">{hostData.roleTitle}</p>
-              )}
+              <p className="text-gray-700 font-semibold text-sm">{hostData.name}</p>
+              <p className="text-gray-400 text-xs">{hostData.roleTitle || 'Pairing Specialist'}</p>
             </div>
           </div>
         )}

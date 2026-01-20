@@ -69,7 +69,7 @@ export const EventModal: React.FC<EventModalProps> = ({ event, onClose, onViewCh
 
             <div className="md:w-1/2 p-8 lg:p-12">
               <div className="mb-8">
-                <div className="flex items-center gap-4 mb-8">
+                <div className="flex items-center gap-4 mb-6">
                   <div 
                     className="w-14 h-14 rounded-full overflow-hidden cursor-pointer border-2 border-white shadow-md hover:scale-105 transition-transform bg-gray-100"
                     onClick={() => event.chef && onViewChef(event.chef)}
@@ -87,7 +87,7 @@ export const EventModal: React.FC<EventModalProps> = ({ event, onClose, onViewCh
                       onClick={() => event.chef && onViewChef(event.chef)}
                       className="text-xs text-gray-400 uppercase font-bold tracking-widest hover:text-accent transition-colors"
                     >
-                      Hosted by Master Chef
+                      Master Chef
                     </button>
                     <p 
                       onClick={() => event.chef && onViewChef(event.chef)}
@@ -97,6 +97,31 @@ export const EventModal: React.FC<EventModalProps> = ({ event, onClose, onViewCh
                     </p>
                   </div>
                 </div>
+
+                {(event as any).host && (
+                  <div className="flex items-center gap-4 mb-6">
+                    <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-md bg-gray-100">
+                      {(event as any).host.imageUrl ? (
+                        <img src={(event as any).host.imageUrl} className="w-full h-full object-cover" alt={(event as any).host.name} />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-400">
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                        </div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-400 uppercase font-bold tracking-widest">
+                        Pairing Specialist
+                      </p>
+                      <p className="font-serif text-xl font-bold text-culinary">
+                        {(event as any).host.name}
+                      </p>
+                      {(event as any).host.roleTitle && (
+                        <p className="text-gray-500 text-sm">{(event as any).host.roleTitle}</p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <p className="text-gray-600 leading-relaxed mb-8 italic font-light text-lg">
                   "{event.description}"
