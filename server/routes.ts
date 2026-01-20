@@ -751,7 +751,10 @@ export function registerApiRoutes(app: Express): void {
             const venue = event.venueId
               ? (await db.select().from(venues).where(eq(venues.id, event.venueId)))[0]
               : null;
-            return { ...event, chef, venue };
+            const host = event.hostId
+              ? (await db.select().from(hosts).where(eq(hosts.id, event.hostId)))[0]
+              : null;
+            return { ...event, chef, venue, host };
           })
         );
         
@@ -1225,10 +1228,33 @@ Important:
           console.error("Error persisting AI discoveries:", err);
         });
 
+        // Combine DB events with AI events, then deduplicate across all sources
+        // DB events take priority (they are curated), so put them first
         const combinedEvents = [...eventsWithRelations, ...uniqueAiEvents];
         
+        // Create a signature set from DB events to filter out AI duplicates
+        const dbEventSignatures = new Set(
+          eventsWithRelations.map(ev => {
+            const title = (ev.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+            const date = ev.date || "";
+            return `${title}-${date}`;
+          })
+        );
+        
+        // Filter AI events that duplicate DB events
+        const filteredCombined = combinedEvents.filter((ev, index) => {
+          // Always keep DB events (they come first)
+          if (index < eventsWithRelations.length) return true;
+          
+          // For AI events, check if they duplicate a DB event
+          const title = (ev.title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const date = ev.date || "";
+          const signature = `${title}-${date}`;
+          return !dbEventSignatures.has(signature);
+        });
+        
         // Filter to only future events and sort chronologically
-        const futureEvents = combinedEvents.filter(ev => isEventInFuture(ev.date));
+        const futureEvents = filteredCombined.filter(ev => isEventInFuture(ev.date));
         
         futureEvents.sort((a, b) => {
           try {
