@@ -5,6 +5,7 @@ import { EventCard } from './components/EventCard';
 import { EventModal } from './components/EventModal';
 import { ProfileOverlay } from './components/ProfileOverlay';
 import { ChefCard } from './components/ChefCard';
+import { HostCard } from './components/HostCard';
 import { ForChefs } from './components/ForChefs';
 import { ForDrinkSpecialists } from './components/ForDrinkSpecialists';
 import { HowItWorks } from './components/HowItWorks';
@@ -108,6 +109,16 @@ const App: React.FC = () => {
       }
     });
     return Array.from(chefMap.values());
+  }, [search.results]);
+
+  const featuredHosts = useMemo(() => {
+    const hostMap = new Map<string, Host>();
+    search.results.forEach(event => {
+      if (event.host && event.host.id && !hostMap.has(event.host.id)) {
+        hostMap.set(event.host.id, event.host as Host);
+      }
+    });
+    return Array.from(hostMap.values());
   }, [search.results]);
 
   useEffect(() => {
@@ -277,6 +288,21 @@ const App: React.FC = () => {
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
                         {featuredChefs.map(chef => (
                           <ChefCard key={chef.id} chef={chef} onClick={setSelectedChef} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {featuredHosts.length > 0 && (
+                    <div className="mt-32">
+                      <div className="text-center mb-16">
+                        <h2 className="text-xs font-bold text-purple-500 uppercase tracking-[0.4em] mb-4">The Connoisseurs</h2>
+                        <h3 className="text-4xl font-serif font-bold text-culinary">Meet the Pairing Specialists</h3>
+                        <p className="text-gray-400 font-light mt-4 max-w-xl mx-auto leading-relaxed">Sommeliers, whisky ambassadors, and beverage experts who elevate every course.</p>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                        {featuredHosts.map(host => (
+                          <HostCard key={host.id} host={host} onClick={() => navigateTo(`/host/${host.slug}`)} />
                         ))}
                       </div>
                     </div>
