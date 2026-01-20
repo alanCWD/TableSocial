@@ -295,12 +295,11 @@ const App: React.FC = () => {
 
                   {featuredHosts.length > 0 && (
                     <div className="mt-32">
-                      <div className="text-center mb-16">
-                        <h2 className="text-xs font-bold text-purple-500 uppercase tracking-[0.4em] mb-4">The Connoisseurs</h2>
-                        <h3 className="text-4xl font-serif font-bold text-culinary">Meet the Pairing Specialists</h3>
-                        <p className="text-gray-400 font-light mt-4 max-w-xl mx-auto leading-relaxed">Sommeliers, whisky ambassadors, and beverage experts who elevate every course.</p>
+                      <div className="text-center mb-12">
+                        <h2 className="text-xs font-bold text-accent uppercase tracking-[0.4em] mb-4">The Connoisseurs</h2>
+                        <h3 className="text-4xl font-serif font-bold text-culinary">Pairing Specialists</h3>
                       </div>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+                      <div className="flex justify-center gap-12 flex-wrap">
                         {featuredHosts.map(host => (
                           <HostCard key={host.id} host={host} onClick={() => navigateTo(`/host/${host.slug}`)} />
                         ))}
