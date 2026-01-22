@@ -1,0 +1,163 @@
+/**
+ * DEMO MODE IMPLEMENTATION FOR TableSocial
+ * 
+ * INSTRUCTIONS FOR AI CODING ASSISTANTS:
+ * 1. Add this script to the app's main HTML file (index.html) inside a <script> tag before </body>
+ * 2. OR create a new file called demo-mode.js and import it in the main HTML
+ * 3. Deploy the app with this code included
+ * 4. Test by visiting the app URL with ?demo=true appended
+ * 
+ * This script auto-fills forms with sample data when the URL contains ?demo=true
+ * No user interaction required - just add this code to the project.
+ */
+(function() {
+    // Check if demo mode is active based on URL parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const isDemoMode = urlParams.get('demo') === 'true';
+
+    if (!isDemoMode) {
+        return; // Exit if not in demo mode
+    }
+
+    // Helper function to safely fill an input field and dispatch events
+    const fillInputField = (selector, value, parentElement = document) => {
+        try {
+            const inputField = parentElement.querySelector(selector);
+            if (inputField) {
+                if (inputField.type === 'date') {
+                    // For date inputs, set to a future date (e.g., next week)
+                    const today = new Date();
+                    const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+                    inputField.value = nextWeek.toISOString().split('T')[0]; // Format 'YYYY-MM-DD'
+                } else if (inputField.type === 'time') {
+                     // For time inputs, ensure 'HH:MM' format
+                    inputField.value = value;
+                } else if (inputField.tagName === 'SELECT') {
+                    // For select elements, try to find an option with the value
+                    const option = inputField.querySelector(`option[value="${value}"]`);
+                    if (option) {
+                        inputField.value = value;
+                    } else {
+                        // Fallback: select the first non-disabled option
+                        const firstOption = inputField.querySelector('option:not([disabled])');
+                        if (firstOption) {
+                            inputField.value = firstOption.value;
+                        }
+                    }
+                } else {
+                    inputField.value = value;
+                }
+                // Dispatch input and change events to trigger any reactive frameworks
+                inputField.dispatchEvent(new Event('input', { bubbles: true }));
+                inputField.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log(`Demo Mode: Filled "${selector}" with "${value}"`);
+                return true;
+            }
+        } catch (e) {
+            console.error(`Demo Mode Error filling field "${selector}":`, e);
+        }
+        return false;
+    };
+
+    // Wait for the DOM to be fully loaded before attempting to fill fields
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('TableSocial Demo Mode Activated!');
+
+        // --- SECTION 1: Diner-focused Forms (Search/Filter, Booking) ---
+
+        // Attempt to fill a global location search/filter input (e.g., on the homepage)
+        console.log('Demo Mode: Attempting to fill location search...');
+        const possibleLocationInputs = [
+            'input#location-search',
+            'input[name="location"]',
+            'input[placeholder*="city"]',
+            'input[placeholder*="location"]',
+            'input[aria-label*="location"]',
+            'input.location-input',
+            'input[type="search"]'
+        ];
+        for (const selector of possibleLocationInputs) {
+            if (fillInputField(selector, 'Victoria, BC')) {
+                // If a location input is filled, try to trigger a search/filter button
+                setTimeout(() => {
+                    const searchButton = document.querySelector('button[type="submit"][aria-label*="search"], button.search-button, .search-icon, button[title*="Search"]');
+                    if (searchButton) {
+                        searchButton.click();
+                        console.log('Demo Mode: Clicked search button after filling location.');
+                    }
+                }, 500); // Short delay for potential debouncing
+                break; // Stop after finding and filling the first suitable input
+            }
+        }
+
+        // Attempt to fill a Booking Form (for a diner to reserve seats at an event)
+        // This would typically be found on an event details page or within a modal.
+        console.log('Demo Mode: Attempting to fill a booking form...');
+        // Look for common form selectors that indicate a booking or reservation form
+        const bookingForm = document.querySelector('form[name="bookingForm"], form#booking-form, form.booking-form, form[action*="book"], form[action*="reserve"]');
+        if (bookingForm) {
+            console.log('Demo Mode: Found a potential booking form. Filling fields...');
+            fillInputField('input[name="dinerName"]', 'Demo Diner', bookingForm);
+            fillInputField('input[name="firstName"]', 'Demo', bookingForm);
+            fillInputField('input[name="lastName"]', 'Diner', bookingForm);
+            fillInputField('input[name="email"]', 'demo.diner@tablesocial.live', bookingForm);
+            fillInputField('input[name="phone"]', '250-555-1234', bookingForm);
+            fillInputField('input[name="quantity"], input[type="number"][min="1"]', '2', bookingForm); // Default 2 seats
+            fillInputField('textarea[name="specialRequests"], textarea[placeholder*="requests"]', 'Allergies: shellfish. Please seat us near a window if possible!', bookingForm);
+            
+            // Try to find and check a "Terms & Conditions" checkbox if present
+            const termsCheckbox = bookingForm.querySelector('input[type="checkbox"][name*="terms"], input[type="checkbox"]#terms-agree');
+            if (termsCheckbox && !termsCheckbox.checked) {
+                termsCheckbox.checked = true;
+                termsCheckbox.dispatchEvent(new Event('change', { bubbles: true }));
+                console.log('Demo Mode: Checked terms & conditions checkbox.');
+            }
+
+            // Optional: Automatically submit the booking form after a delay
+            setTimeout(() => {
+                const submitButton = bookingForm.querySelector('button[type="submit"], input[type="submit"]');
+                if (submitButton) {
+                    submitButton.click();
+                    console.log('Demo Mode: Automatically clicked booking form submit button.');
+                }
+            }, 3000); // Submit after 3 seconds
+        }
+
+        // --- SECTION 2: Chef/Curator-focused Forms (Event Creation) ---
+
+        // Attempt to fill an Event Creation Form (for chefs/curators to add new events)
+        // This would typically be found on an admin or "create event" page, not necessarily the homepage.
+        console.log('Demo Mode: Attempting to fill an event creation form...');
+        // Look for common form selectors for creating or managing events
+        const eventCreationForm = document.querySelector('form[name="createEventForm"], form#create-event-form, form.event-form, form[action*="create-event"], form[action*="add-event"]');
+        if (eventCreationForm) {
+            console.log('Demo Mode: Found a potential event creation form. Filling fields...');
+            fillInputField('input[name="eventTitle"], input[id="event-title"]', 'Secret Garden Pop-Up Dinner', eventCreationForm);
+            fillInputField('textarea[name="eventDescription"], textarea[id="event-description"]', 'An exclusive 5-course tasting menu featuring local, seasonal ingredients by Chef Alex and Sommelier Jane. Experience a unique blend of flavors in a hidden urban garden setting. Limited to 12 guests.', eventCreationForm);
+            fillInputField('input[name="eventLocation"], input[id="event-location"]', '123 Garden Lane, Victoria, BC', eventCreationForm);
+            fillInputField('input[type="date"][name="eventDate"], input[type="date"][id="event-date"]', null, eventCreationForm); // Auto-fills next week's date
+            fillInputField('input[type="time"][name="eventTime"], input[type="time"][id="event-time"]', '19:00', eventCreationForm);
+            fillInputField('input[name="eventPrice"], input[id="event-price"]', '125.00', eventCreationForm);
+            fillInputField('input[name="eventCapacity"], input[id="event-capacity"]', '12', eventCreationForm);
+            fillInputField('input[name="organizerName"], input[id="organizer-name"]', 'Chef Alex & Sommelier Jane', eventCreationForm);
+            fillInputField('input[name="contactEmail"], input[id="contact-email"]', 'chef.alex@tablesocial.live', eventCreationForm);
+            
+            // Try to fill dropdowns for event type or cuisine
+            fillInputField('select[name="eventType"], select[id="event-type"]', 'Pop-Up Dinner', eventCreationForm);
+            fillInputField('select[name="cuisineType"], select[id="cuisine-type"]', 'Modern Canadian', eventCreationForm);
+
+            // Note: File inputs (for image uploads) cannot be programmatically filled due to security restrictions.
+            // A developer would need to manually add a test image for a full demo.
+            console.log('Demo Mode: Note: Image upload fields cannot be auto-filled for security reasons.');
+
+            // Optional: Automatically submit the event creation form after a delay
+            setTimeout(() => {
+                const submitButton = eventCreationForm.querySelector('button[type="submit"], input[type="submit"]');
+                if (submitButton) {
+                    submitButton.click();
+                    console.log('Demo Mode: Automatically clicked event creation form submit button.');
+                }
+            }, 3000); // Submit after 3 seconds
+        }
+    });
+})();
