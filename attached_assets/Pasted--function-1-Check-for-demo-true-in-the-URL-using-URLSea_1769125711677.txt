@@ -1,0 +1,159 @@
+(function() {
+    // 1. Check for ?demo=true in the URL using URLSearchParams
+    const urlParams = new URLSearchParams(window.location.search);
+    const isDemoMode = urlParams.get('demo') === 'true';
+
+    if (!isDemoMode) {
+        // Exit if not in demo mode
+        return;
+    }
+
+    console.log('TableSocial Demo Mode Activated!');
+
+    // 2. Use DOMContentLoaded event to wait for page load
+    document.addEventListener('DOMContentLoaded', () => {
+        // Optional delay before filling, useful if elements take a moment to render
+        // Adjust the delay (in milliseconds) as needed for your application's load time.
+        setTimeout(() => {
+            // 6. Use try-catch for robustness
+            try {
+                // --- Demo Data for Diners (Event Search/Discovery) ---
+                console.log('Attempting to fill Diner search fields...');
+
+                // Field for searching by location (e.g., on a homepage or search page)
+                // Common selectors: #id, input[name], input[placeholder containing keyword]
+                const locationInput = document.querySelector('#location, input[name="location"], input[placeholder*="Location"], input[placeholder*="Victoria"]');
+                if (locationInput) {
+                    locationInput.value = 'Victoria, BC'; // Test market
+                    console.log('Filled location:', locationInput.value);
+                }
+
+                // Field for selecting an event date (e.g., date picker)
+                const dateInput = document.querySelector('#eventDate, input[name="eventDate"], input[type="date"]');
+                if (dateInput) {
+                    const today = new Date();
+                    const nextWeek = new Date(today);
+                    nextWeek.setDate(today.getDate() + 7); // Set for a week from now
+                    const formattedDate = nextWeek.toISOString().split('T')[0]; // YYYY-MM-DD format for date inputs
+                    dateInput.value = formattedDate;
+                    console.log('Filled event date:', dateInput.value);
+                }
+
+                // Field for event type/category filter (e.g., select dropdown or text input)
+                const eventTypeInput = document.querySelector('#eventType, select[name="eventType"], input[name="eventType"], input[placeholder*="Event Type"]');
+                if (eventTypeInput) {
+                    if (eventTypeInput.tagName === 'SELECT') {
+                        // If it's a select dropdown, try to find and set an existing option
+                        const options = Array.from(eventTypeInput.options);
+                        const targetOption = options.find(opt => 
+                            opt.value.toLowerCase().includes('pop-up') || opt.text.toLowerCase().includes('pop-up')
+                        );
+                        if (targetOption) {
+                            eventTypeInput.value = targetOption.value;
+                        } else {
+                            // Fallback if 'pop-up' option doesn't exist, try setting a common value
+                            eventTypeInput.value = 'Chef\'s Table'; 
+                        }
+                    } else {
+                        // For text input fields
+                        eventTypeInput.value = 'Pop-up Dinner';
+                    }
+                    console.log('Filled event type:', eventTypeInput.value);
+                }
+
+                // --- Demo Data for Chefs/Curators (Event Creation/Management) ---
+                // These fields would typically be on a dedicated "Create Event" page.
+                // The script attempts to fill them if they exist on the current page.
+                console.log('Attempting to fill Chef event creation fields...');
+
+                // Event Name input field
+                const eventNameInput = document.querySelector('#eventName, input[name="eventName"], input[placeholder*="Event Name"]');
+                if (eventNameInput) {
+                    eventNameInput.value = 'Secret Waterfront Tasting';
+                    console.log('Filled event name:', eventNameInput.value);
+                }
+
+                // Event Description textarea
+                const eventDescriptionTextarea = document.querySelector('#eventDescription, textarea[name="eventDescription"], textarea[placeholder*="Description"]');
+                if (eventDescriptionTextarea) {
+                    eventDescriptionTextarea.value = 'An intimate multi-course menu featuring local ingredients, prepared by Chef Isabella, paired with Vancouver Island wines.';
+                    console.log('Filled event description:', eventDescriptionTextarea.value);
+                }
+
+                // Event Time input field
+                const eventTimeInput = document.querySelector('#eventTime, input[name="eventTime"], input[type="time"]');
+                if (eventTimeInput) {
+                    eventTimeInput.value = '19:30'; // 7:30 PM
+                    console.log('Filled event time:', eventTimeInput.value);
+                }
+
+                // Event Address input field (more specific than general location)
+                const eventAddressInput = document.querySelector('#eventAddress, input[name="eventAddress"], input[placeholder*="Address"]');
+                if (eventAddressInput) {
+                    eventAddressInput.value = '456 Ocean Drive, Victoria, BC';
+                    console.log('Filled event address:', eventAddressInput.value);
+                }
+
+                // Number of Seats input field
+                const numSeatsInput = document.querySelector('#numSeats, input[name="numSeats"], input[type="number"][min="1"]');
+                if (numSeatsInput) {
+                    numSeatsInput.value = '10';
+                    console.log('Filled number of seats:', numSeatsInput.value);
+                }
+
+                // Price per Seat input field
+                const priceInput = document.querySelector('#price, input[name="price"], input[inputmode="decimal"], input[type="number"][min="0"]');
+                if (priceInput) {
+                    priceInput.value = '150.00';
+                    console.log('Filled price:', priceInput.value);
+                }
+
+                // Host Name / Chef Name input field
+                const hostNameInput = document.querySelector('#hostName, input[name="hostName"], select[name="hostName"], input[placeholder*="Host Name"]');
+                if (hostNameInput) {
+                    hostNameInput.value = 'Chef Isabella Rossi';
+                    console.log('Filled host name:', hostNameInput.value);
+                }
+
+
+                // 5. Set a timeout to optionally trigger form submission
+                // This is commented out by default as automatic submission can be disruptive for a general demo.
+                // Uncomment and adjust 'submitFormAutomatically' to true if you want forms to submit after filling.
+                const submitFormAutomatically = false; // Change to true to enable auto-submission
+
+                if (submitFormAutomatically) {
+                    console.log('Attempting to submit form in 3 seconds...');
+                    setTimeout(() => {
+                        // Prioritize common submission buttons
+                        const searchButton = document.querySelector('#searchButton, button[type="submit"][aria-label*="Search"], button[title*="Search"]');
+                        const createEventButton = document.querySelector('#createEventButton, button[type="submit"][aria-label*="Create"], button[title*="Create"]');
+                        const generalSubmitButton = document.querySelector('button[type="submit"]:not([aria-label]), input[type="submit"]');
+
+                        if (searchButton) {
+                            searchButton.click();
+                            console.log('Search button clicked automatically.');
+                        } else if (createEventButton) {
+                            createEventButton.click();
+                            console.log('Create Event button clicked automatically.');
+                        } else if (generalSubmitButton) {
+                            generalSubmitButton.click();
+                            console.log('General submit button clicked automatically.');
+                        } else {
+                            console.warn('No clear search, create event, or general submit button found to submit automatically.');
+                            // Fallback to submitting the first form found, if any
+                            const firstForm = document.querySelector('form');
+                            if (firstForm) {
+                                firstForm.submit();
+                                console.log('First form submitted automatically.');
+                            }
+                        }
+                    }, 3000); // Submit after 3 seconds
+                }
+
+            } catch (error) {
+                // Log any errors that occur during the demo mode execution
+                console.error('TableSocial Demo Mode Error:', error);
+            }
+        }, 500); // Wait 500ms after DOMContentLoaded to ensure elements are rendered
+    });
+})();
