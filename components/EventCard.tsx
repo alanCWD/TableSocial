@@ -153,7 +153,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
           </div>
         )}
 
-        <button className="w-full border border-culinary text-culinary py-2.5 rounded-xl font-bold text-sm group-hover:bg-culinary group-hover:text-white transition-all shadow-sm">
+        <button className="w-full border border-culinary text-culinary py-2.5 rounded-xl font-bold text-sm hover:bg-culinary hover:text-white transition-colors duration-200 shadow-sm">
           Experience Details
         </button>
       </div>
