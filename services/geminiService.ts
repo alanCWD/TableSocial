@@ -25,7 +25,7 @@ const getCategoryImage = (category: string): string => {
   const categoryLower = category.toLowerCase();
   
   if (categoryLower.includes('long table')) {
-    return 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&q=80&w=800';
+    return '/long-table-dinner.jpg';
   }
   if (categoryLower.includes('whisky') || categoryLower.includes('whiskey')) {
     return 'https://images.unsplash.com/photo-1527281400683-1aae777175f8?auto=format&fit=crop&q=80&w=800';
