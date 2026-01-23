@@ -33,6 +33,18 @@ function parseRoute(): RouteType {
     const slug = path.replace('/host/', '');
     return { type: 'host', slug };
   }
+  if (path === '/how-it-works') {
+    return { type: 'page', page: 'how-it-works' };
+  }
+  if (path === '/for-chefs') {
+    return { type: 'page', page: 'for-chefs' };
+  }
+  if (path === '/for-drink-specialists') {
+    return { type: 'page', page: 'for-drink-specialists' };
+  }
+  if (path === '/admin') {
+    return { type: 'page', page: 'admin' };
+  }
   return { type: 'page', page: 'explore' };
 }
 
@@ -77,14 +89,40 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const handlePopState = () => setRoute(parseRoute());
+    const handlePopState = () => {
+      const newRoute = parseRoute();
+      setRoute(newRoute);
+      if (newRoute.type === 'page') {
+        setCurrentPage(newRoute.page);
+      }
+    };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
+  useEffect(() => {
+    if (route.type === 'page') {
+      setCurrentPage(route.page);
+    }
+  }, [route]);
+
   const navigateTo = (path: string) => {
     window.history.pushState({}, '', path);
     setRoute(parseRoute());
+  };
+
+  const navigateToPage = (page: Page) => {
+    const pathMap: Record<Page, string> = {
+      'explore': '/',
+      'how-it-works': '/how-it-works',
+      'for-chefs': '/for-chefs',
+      'for-drink-specialists': '/for-drink-specialists',
+      'admin': '/admin'
+    };
+    const path = pathMap[page];
+    window.history.pushState({}, '', path);
+    setRoute({ type: 'page', page });
+    setCurrentPage(page);
   };
 
   const goHome = () => {
@@ -392,7 +430,7 @@ const App: React.FC = () => {
 
   return (
     <Layout
-      onNavigate={setCurrentPage}
+      onNavigate={navigateToPage}
       currentPage={currentPage}
       user={user}
       onSignIn={handleSignIn}
