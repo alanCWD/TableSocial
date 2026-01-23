@@ -1,15 +1,28 @@
+/**
+ * DEMO MODE IMPLEMENTATION FOR TableSocial
+ * 
+ * INSTRUCTIONS FOR AI CODING ASSISTANTS:
+ * 1. Add this script to the app's main HTML file (index.html) inside a <script> tag before </body>
+ * 2. OR create a new file called demo-mode.js and import it in the main HTML
+ * 3. Deploy the app with this code included
+ * 4. Test by visiting the app URL with ?demo=true appended
+ * 
+ * This script auto-fills forms with sample data when the URL contains ?demo=true
+ * No user interaction required - just add this code to the project.
+ */
 (function() {
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('demo') !== 'true') return;
   
+  // Helper: Wait for dynamic content to appear (for API responses)
   const waitForContent = (selector, timeout = 15000) => {
     return new Promise((resolve, reject) => {
       const existing = document.querySelector(selector);
-      if (existing && existing.textContent.trim()) { resolve(existing); return; }
+      if (existing && existing.textContent.trim()) { resolve(existing); return; } // Check for text content
       
       const observer = new MutationObserver((mutations, obs) => {
         const el = document.querySelector(selector);
-        if (el && (el.textContent.trim() || el.children.length > 0)) {
+        if (el && (el.textContent.trim() || el.children.length > 0)) { // Also check for child elements if textContent might be empty but element exists
           obs.disconnect(); 
           resolve(el); 
         }
@@ -33,21 +46,27 @@
     } else {
       console.warn(`Demo mode: Field ${selector} not found.`);
     }
-    return el;
+    return el; // Return the element for chaining or null if not found
   };
   
   document.addEventListener('DOMContentLoaded', async function() {
     try {
       console.log('Demo mode active: Initializing...');
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1000)); // Initial delay to let the app fully initialize
       
+      // Step 1: Fill the location field
       const locationInput = fillField('input[name="location"], input[placeholder*="location"], input[id*="location"]', 'Victoria, BC');
 
+      // Step 2: Click a submit/search button
+      // This assumes a common pattern for a search form or location input with a submit button.
+      // Adjust selector as needed for the specific app's HTML.
       let submitButton = document.querySelector('button[type="submit"]');
       if (!submitButton) {
+        // Fallback for a common search button text or class
         submitButton = document.querySelector('button:contains("Search"), button:contains("Find Events"), button:contains("Go")');
       }
       if (!submitButton && locationInput && locationInput.form) {
+        // As a last resort, try to find a submit button within the same form as the location input
         submitButton = locationInput.form.querySelector('button[type="submit"]');
       }
 
@@ -58,6 +77,9 @@
         console.warn('Demo mode: Could not find a suitable submit/search button. Attempting to proceed without clicking.');
       }
 
+      // Step 3: Wait for search results to appear (e.g., event cards)
+      // This selector needs to target an element that indicates event listings have loaded.
+      // Common examples: '.event-card', '.event-list-item', '.feed-item', '#events-container div:first-child'
       console.log('Demo mode: Waiting for search results...');
       await waitForContent('.event-card, .event-list-item, .feed-item, [data-testid="event-item"]', 15000);
       console.log('Demo mode: Search results loaded successfully.');
