@@ -1,7 +1,20 @@
+/**
+ * DEMO MODE IMPLEMENTATION FOR TableSocial
+ * 
+ * INSTRUCTIONS FOR AI CODING ASSISTANTS:
+ * 1. Add this script to the app's main HTML file (index.html) inside a <script> tag before </body>
+ * 2. OR create a new file called demo-mode.js and import it in the main HTML
+ * 3. Deploy the app with this code included
+ * 4. Test by visiting the app URL with ?demo=true appended
+ * 
+ * This script auto-fills forms with sample data when the URL contains ?demo=true
+ * No user interaction required - just add this code to the project.
+ */
 (function() {
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('demo') !== 'true') return;
   
+  // Helper: Wait for dynamic content to appear (for API responses)
   const waitForContent = (selector, timeout = 15000) => {
     return new Promise((resolve, reject) => {
       const existing = document.querySelector(selector);
@@ -18,7 +31,7 @@
       
       setTimeout(() => { 
         observer.disconnect(); 
-        const el = document.querySelector(selector);
+        const el = document.querySelector(selector); // Check one last time
         if (el && el.textContent.trim()) {
             resolve(el);
         } else {
@@ -53,22 +66,27 @@
   document.addEventListener('DOMContentLoaded', async function() {
     console.log('TableSocial Demo Mode: Initializing...');
     try {
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1000)); // Initial delay to let the app fully initialize
 
+      // 1. Find and fill the location search input field
       console.log('TableSocial Demo Mode: Filling location field with "Victoria, BC"...');
       const locationInputSelector = 'input.search-input'; 
       if (!fillField(locationInputSelector, 'Victoria, BC')) {
         throw new Error(`Demo Mode Failed: Could not find or fill location input "${locationInputSelector}".`);
       }
       
+      // Give a brief moment for any potential internal UI updates or debouncing
       await new Promise(r => setTimeout(r, 200)); 
 
+      // 2. Click the search button (magnifying glass icon)
       console.log('TableSocial Demo Mode: Clicking search button...');
       const searchButtonSelector = 'a.search-button'; 
       if (!clickElement(searchButtonSelector)) {
         throw new Error(`Demo Mode Failed: Could not find or click search button "${searchButtonSelector}".`);
       }
 
+      // 3. Wait for search results to appear. 
+      // An event title is a strong indicator that results have loaded and contain content.
       console.log('TableSocial Demo Mode: Waiting for search results (up to 15 seconds)...');
       const resultsIndicatorSelector = 'h2.event-title'; 
       await waitForContent(resultsIndicatorSelector, 15000);
