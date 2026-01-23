@@ -1,10 +1,24 @@
+/**
+ * DEMO MODE IMPLEMENTATION FOR TableSocial
+ * 
+ * INSTRUCTIONS FOR AI CODING ASSISTANTS:
+ * 1. Add this script to the app's main HTML file (index.html) inside a <script> tag before </body>
+ * 2. OR create a new file called demo-mode.js and import it in the main HTML
+ * 3. Deploy the app with this code included
+ * 4. Test by visiting the app URL with ?demo=true appended
+ * 
+ * This script auto-fills forms with sample data when the URL contains ?demo=true
+ * No user interaction required - just add this code to the project.
+ */
 (function() {
   const urlParams = new URLSearchParams(window.location.search);
   if (urlParams.get('demo') !== 'true') return;
 
+  // Helper: Wait for dynamic content to appear (for API responses)
   const waitForContent = (selector, timeout = 15000) => {
     return new Promise((resolve, reject) => {
       const existing = document.querySelector(selector);
+      // Check if content already exists and has text, excluding cases where it's an empty placeholder
       if (existing && (existing.textContent.trim() || existing.children.length > 0)) {
         resolve(existing);
         return;
@@ -12,14 +26,17 @@
 
       const observer = new MutationObserver((mutations, obs) => {
         const el = document.querySelector(selector);
+        // Resolve if the element appears and has actual content (text or children)
         if (el && (el.textContent.trim() || el.children.length > 0)) {
           obs.disconnect();
           resolve(el);
         }
       });
 
+      // Observe the whole body for changes, including subtree modifications
       observer.observe(document.body, { childList: true, subtree: true });
 
+      // Set a timeout to reject the promise if the content doesn't appear
       setTimeout(() => {
         observer.disconnect();
         reject(new Error(`Timeout waiting for selector: ${selector}`));
@@ -31,6 +48,7 @@
     const el = document.querySelector(selector);
     if (el) {
       el.value = value;
+      // Dispatch both 'input' and 'change' events to ensure framework reactivity
       el.dispatchEvent(new Event('input', {
         bubbles: true
       }));
@@ -58,25 +76,40 @@
   document.addEventListener('DOMContentLoaded', async function() {
     console.log('Demo mode active: Initializing...');
     try {
+      // Initial delay to let the app fully initialize
       await new Promise(r => setTimeout(r, 1000));
       console.log('Initial delay complete.');
 
+      // --- Step 1: Fill the location field ---
+      // Assuming there's an input field for location, commonly named 'location'
+      // or with a placeholder indicating location.
+      // Given the example, `input[name="location"]` is a good starting point.
       if (!fillField('input[name="location"]', 'Victoria, BC')) {
+        // Fallback selectors if `name="location"` isn't found
         fillField('input[placeholder*="location"]', 'Victoria, BC') ||
         fillField('input[id*="location"]', 'Victoria, BC') ||
         fillField('input.location-input', 'Victoria, BC');
       }
 
+      // --- Step 2: Click the submit/search button ---
+      // This could be a button with type="submit", a specific class, or text.
+      // We'll try common selectors.
       let clickedSubmit = false;
 
+      // Try a specific submit button within a form
       clickedSubmit = clickElement('form button[type="submit"]');
 
+      // If not found, try a generic submit button
       if (!clickedSubmit) clickedSubmit = clickElement('button[type="submit"]');
 
+      // If still not found, try buttons with common search-related classes or attributes
       if (!clickedSubmit) clickedSubmit = clickElement('button.search-button');
       if (!clickedSubmit) clickedSubmit = clickElement('button[aria-label*="search"]');
       if (!clickedSubmit) clickedSubmit = clickElement('button[data-testid*="search"]');
 
+      // If still not found, try a button that likely initiates search based on text content.
+      // Note: `document.querySelector('button:contains("Search")')` is not standard CSS,
+      // so we use a loop for robustness if direct selectors fail.
       if (!clickedSubmit) {
         const potentialSearchButtons = document.querySelectorAll('button, a');
         for (const btn of potentialSearchButtons) {
@@ -92,8 +125,15 @@
 
       if (!clickedSubmit) {
         console.warn('Could not find a submit/search button to click. Demo mode might not proceed as expected.');
+        // Optionally, if the search is triggered by pressing Enter in the input,
+        // we could dispatch a keyboard event here if no button is found.
+        // For now, we'll proceed assuming the input fill triggered something or it's not strictly necessary.
       }
 
+
+      // --- Step 3: Wait for the event listing results to appear ---
+      // The app curates events, so we expect a list of events to be displayed.
+      // Common selectors for list items or cards: '.event-card', '.event-item', '.listing', etc.
       console.log('Waiting for event listing content...');
       const resultsContainer = await waitForContent('.event-card, .event-item, .event-listing, [data-testid="event-list"] > *');
       console.log('Event listing content found:', resultsContainer);
