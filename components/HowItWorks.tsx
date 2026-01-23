@@ -24,7 +24,7 @@ export const HowItWorks: React.FC = () => {
               </p>
             </div>
             <div className="md:w-1/2">
-              <img src="https://images.unsplash.com/photo-1550966841-3ee7adac1af0?auto=format&fit=crop&q=80&w=800" className="rounded-[3rem] shadow-xl" alt="Search" />
+              <img src="/how-it-works-discovery.avif" className="rounded-[3rem] shadow-xl" alt="Discovery Through Curation" />
             </div>
           </div>
 
