@@ -1,14 +1,28 @@
 import type { Express } from "express";
 import { db } from "./db.js";
 import { chefs, hosts, events, venues, aiIngestions, cachedAiEvents } from "../shared/schema.js";
-import { eq, and, gte, desc, lt } from "drizzle-orm";
+import { eq, and, gte, desc, lt, isNull, sql, ilike, or } from "drizzle-orm";
 import { isAuthenticated } from "./replit_integrations/auth/index.js";
 import { GoogleGenAI, Type } from "@google/genai";
 import { generateSlug, generateEventJsonLd, generateChefJsonLd, generateHostJsonLd } from "./utils/slug.js";
 import { persistAiDiscoveries } from "./services/aiIngestion.js";
 import { searchInstagramHashtags, testInstagramConnection } from "./services/instagramDiscovery.js";
 
-// Known closed venues that should be rejected (exact match on full name or word boundaries)
+function levenshteinDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
 const CLOSED_VENUES = [
   "olo restaurant",
   "olo victoria",
@@ -305,7 +319,7 @@ export function registerApiRoutes(app: Express): void {
 
   app.get("/api/chefs", async (req, res) => {
     try {
-      const allChefs = await db.select().from(chefs).orderBy(desc(chefs.createdAt));
+      const allChefs = await db.select().from(chefs).where(isNull(chefs.deletedAt)).orderBy(desc(chefs.createdAt));
       res.json(allChefs);
     } catch (error) {
       console.error("Error fetching chefs:", error);
@@ -315,7 +329,7 @@ export function registerApiRoutes(app: Express): void {
 
   app.get("/api/chefs/:id", async (req, res) => {
     try {
-      const [chef] = await db.select().from(chefs).where(eq(chefs.id, req.params.id));
+      const [chef] = await db.select().from(chefs).where(and(eq(chefs.id, req.params.id), isNull(chefs.deletedAt)));
       if (!chef) {
         return res.status(404).json({ error: "Chef not found" });
       }
@@ -328,7 +342,7 @@ export function registerApiRoutes(app: Express): void {
 
   app.get("/api/chef/:slug", async (req, res) => {
     try {
-      const [chef] = await db.select().from(chefs).where(eq(chefs.slug, req.params.slug));
+      const [chef] = await db.select().from(chefs).where(and(eq(chefs.slug, req.params.slug), isNull(chefs.deletedAt)));
       if (!chef) {
         return res.status(404).json({ error: "Chef not found" });
       }
@@ -405,7 +419,7 @@ export function registerApiRoutes(app: Express): void {
 
   app.delete("/api/admin/chefs/:id", isAuthenticated, async (req, res) => {
     try {
-      await db.delete(chefs).where(eq(chefs.id, req.params.id));
+      await db.update(chefs).set({ deletedAt: new Date() }).where(eq(chefs.id, req.params.id));
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting chef:", error);
@@ -416,7 +430,7 @@ export function registerApiRoutes(app: Express): void {
   // Hosts (Drink Specialists) Routes
   app.get("/api/hosts", async (req, res) => {
     try {
-      const allHosts = await db.select().from(hosts).orderBy(desc(hosts.createdAt));
+      const allHosts = await db.select().from(hosts).where(isNull(hosts.deletedAt)).orderBy(desc(hosts.createdAt));
       res.json(allHosts);
     } catch (error) {
       console.error("Error fetching hosts:", error);
@@ -426,7 +440,7 @@ export function registerApiRoutes(app: Express): void {
 
   app.get("/api/hosts/:id", async (req, res) => {
     try {
-      const [host] = await db.select().from(hosts).where(eq(hosts.id, req.params.id));
+      const [host] = await db.select().from(hosts).where(and(eq(hosts.id, req.params.id), isNull(hosts.deletedAt)));
       if (!host) {
         return res.status(404).json({ error: "Host not found" });
       }
@@ -439,7 +453,7 @@ export function registerApiRoutes(app: Express): void {
 
   app.get("/api/host/:slug", async (req, res) => {
     try {
-      const [host] = await db.select().from(hosts).where(eq(hosts.slug, req.params.slug));
+      const [host] = await db.select().from(hosts).where(and(eq(hosts.slug, req.params.slug), isNull(hosts.deletedAt)));
       if (!host) {
         return res.status(404).json({ error: "Host not found" });
       }
@@ -485,7 +499,7 @@ export function registerApiRoutes(app: Express): void {
 
   app.delete("/api/admin/hosts/:id", isAuthenticated, async (req, res) => {
     try {
-      await db.delete(hosts).where(eq(hosts.id, req.params.id));
+      await db.update(hosts).set({ deletedAt: new Date() }).where(eq(hosts.id, req.params.id));
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting host:", error);
@@ -495,11 +509,76 @@ export function registerApiRoutes(app: Express): void {
 
   app.get("/api/admin/hosts", isAuthenticated, async (req, res) => {
     try {
-      const allHosts = await db.select().from(hosts).orderBy(desc(hosts.createdAt));
+      const allHosts = await db.select().from(hosts).where(isNull(hosts.deletedAt)).orderBy(desc(hosts.createdAt));
       res.json(allHosts);
     } catch (error) {
       console.error("Error fetching hosts:", error);
       res.status(500).json({ error: "Failed to fetch hosts" });
+    }
+  });
+
+  app.get("/api/admin/duplicates", isAuthenticated, async (req, res) => {
+    try {
+      const allChefs = await db.select().from(chefs).where(isNull(chefs.deletedAt));
+      const allHosts = await db.select().from(hosts).where(isNull(hosts.deletedAt));
+
+      const normalizeForCompare = (name: string) => name.toLowerCase().replace(/^(chef|chef de cuisine|executive chef|head chef)\s+/i, '').replace(/\s+/g, ' ').trim();
+
+      const chefDuplicates: { group: typeof allChefs }[] = [];
+      const visited = new Set<string>();
+      for (let i = 0; i < allChefs.length; i++) {
+        if (visited.has(allChefs[i].id)) continue;
+        const norm = normalizeForCompare(allChefs[i].name);
+        const group = [allChefs[i]];
+        for (let j = i + 1; j < allChefs.length; j++) {
+          if (visited.has(allChefs[j].id)) continue;
+          const norm2 = normalizeForCompare(allChefs[j].name);
+          if (norm === norm2 || (norm.length >= 4 && norm2.length >= 4 && levenshteinDistance(norm, norm2) <= 2)) {
+            group.push(allChefs[j]);
+            visited.add(allChefs[j].id);
+          }
+        }
+        if (group.length > 1) {
+          visited.add(allChefs[i].id);
+          chefDuplicates.push({ group });
+        }
+      }
+
+      const hostDuplicates: { group: typeof allHosts }[] = [];
+      const visitedHosts = new Set<string>();
+      for (let i = 0; i < allHosts.length; i++) {
+        if (visitedHosts.has(allHosts[i].id)) continue;
+        const norm = allHosts[i].name.toLowerCase().trim();
+        const group = [allHosts[i]];
+        for (let j = i + 1; j < allHosts.length; j++) {
+          if (visitedHosts.has(allHosts[j].id)) continue;
+          const norm2 = allHosts[j].name.toLowerCase().trim();
+          if (norm === norm2 || (norm.length >= 4 && norm2.length >= 4 && levenshteinDistance(norm, norm2) <= 2)) {
+            group.push(allHosts[j]);
+            visitedHosts.add(allHosts[j].id);
+          }
+        }
+        if (group.length > 1) {
+          visitedHosts.add(allHosts[i].id);
+          hostDuplicates.push({ group });
+        }
+      }
+
+      const crossRoleMatches: { chef: typeof allChefs[0], host: typeof allHosts[0] }[] = [];
+      for (const chef of allChefs) {
+        const chefNorm = normalizeForCompare(chef.name);
+        for (const host of allHosts) {
+          const hostNorm = host.name.toLowerCase().trim();
+          if (chefNorm === hostNorm || (chefNorm.length >= 4 && hostNorm.length >= 4 && levenshteinDistance(chefNorm, hostNorm) <= 2)) {
+            crossRoleMatches.push({ chef, host });
+          }
+        }
+      }
+
+      res.json({ chefDuplicates, hostDuplicates, crossRoleMatches });
+    } catch (error) {
+      console.error("Error finding duplicates:", error);
+      res.status(500).json({ error: "Failed to find duplicates" });
     }
   });
 
@@ -1034,22 +1113,19 @@ Important:
           console.log(`Cached ${validAiEvents.length} AI events for ${location}, expires at ${expiresAt.toISOString()}`);
         }
 
-        // Fetch all chefs from database to match images
-        const allDbChefs = await db.select().from(chefs);
+        const allDbChefs = await db.select().from(chefs).where(isNull(chefs.deletedAt));
+        const allDbHosts = await db.select().from(hosts).where(isNull(hosts.deletedAt));
         
-        // Helper function to find matching chef from database
         const findMatchingDbChef = (chefName: string) => {
           if (!chefName) return null;
           const normalized = chefName.toLowerCase().replace(/^chef\s+/i, '').trim();
           const firstName = normalized.split(' ')[0];
           
-          // Exact match (ignoring "Chef" prefix)
           for (const chef of allDbChefs) {
             const dbNormalized = chef.name.toLowerCase().replace(/^chef\s+/i, '').trim();
             if (dbNormalized === normalized) return chef;
           }
           
-          // First name match
           for (const chef of allDbChefs) {
             const dbNormalized = chef.name.toLowerCase().replace(/^chef\s+/i, '').trim();
             const dbFirstName = dbNormalized.split(' ')[0];
@@ -1059,8 +1135,28 @@ Important:
           return null;
         };
 
+        const findMatchingDbHost = (hostName: string) => {
+          if (!hostName) return null;
+          const normalized = hostName.toLowerCase().trim();
+          const firstName = normalized.split(' ')[0];
+
+          for (const host of allDbHosts) {
+            const dbNormalized = host.name.toLowerCase().trim();
+            if (dbNormalized === normalized) return host;
+          }
+
+          for (const host of allDbHosts) {
+            const dbNormalized = host.name.toLowerCase().trim();
+            const dbFirstName = dbNormalized.split(' ')[0];
+            if (dbFirstName === firstName && firstName.length >= 3) return host;
+          }
+
+          return null;
+        };
+
         const enhancedFreshEvents = validAiEvents.map((ev: any, i: number) => {
           const matchedChef = findMatchingDbChef(ev.chefName);
+          const matchedHost = findMatchingDbHost(ev.hostName);
           return {
             id: `ai-event-${Date.now()}-${i}`,
             title: ev.title,
@@ -1094,11 +1190,25 @@ Important:
               pastEventsCount: 0,
               socialLinks: { instagram: null, website: null, twitter: null },
             },
-            host: ev.hostName ? {
+            host: matchedHost ? {
+              id: matchedHost.id,
+              name: matchedHost.name,
+              slug: matchedHost.slug,
+              bio: matchedHost.bio || ev.hostBio || "",
+              specialty: matchedHost.specialty || "",
+              role: matchedHost.role || "other",
+              roleTitle: matchedHost.roleTitle || ev.hostRole || "",
+              imageUrl: matchedHost.imageUrl || null,
+              socialLinks: matchedHost.socialLinks || {},
+              pastEventsCount: matchedHost.pastEventsCount || 0,
+              verified: matchedHost.verified || false,
+              region: matchedHost.region || "",
+            } : ev.hostName ? {
               id: `ai-host-${Date.now()}-${i}`,
               name: ev.hostName,
               bio: ev.hostBio || "",
               role: ev.hostRole || "Host",
+              imageUrl: null,
             } : null,
             venue: {
               id: `ai-venue-${Date.now()}-${i}`,
@@ -1114,6 +1224,7 @@ Important:
 
         const enhancedCachedEvents = cachedEvents.map((ev: any, i: number) => {
           const matchedChef = findMatchingDbChef(ev.chefName);
+          const matchedHost = findMatchingDbHost(ev.hostName);
           return {
             id: `cached-event-${ev.id || i}`,
             title: ev.title,
@@ -1147,11 +1258,25 @@ Important:
               pastEventsCount: 0,
               socialLinks: { instagram: null, website: null, twitter: null },
             },
-            host: ev.hostName ? {
+            host: matchedHost ? {
+              id: matchedHost.id,
+              name: matchedHost.name,
+              slug: matchedHost.slug,
+              bio: matchedHost.bio || ev.hostBio || "",
+              specialty: matchedHost.specialty || "",
+              role: matchedHost.role || "other",
+              roleTitle: matchedHost.roleTitle || ev.hostRole || "",
+              imageUrl: matchedHost.imageUrl || null,
+              socialLinks: matchedHost.socialLinks || {},
+              pastEventsCount: matchedHost.pastEventsCount || 0,
+              verified: matchedHost.verified || false,
+              region: matchedHost.region || "",
+            } : ev.hostName ? {
               id: `cached-host-${ev.id || i}`,
               name: ev.hostName,
               bio: ev.hostBio || "",
               role: ev.hostRole || "Host",
+              imageUrl: null,
             } : null,
             venue: {
               id: `cached-venue-${ev.id || i}`,

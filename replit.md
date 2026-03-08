@@ -189,6 +189,16 @@ Users can refresh event discovery at any time using the "Refresh Events" button:
 - **Chronological Sorting**: Events are always sorted by date (earliest first)
 - **Persistence**: All discovered events are saved to the database, including past events for historical records
 
+## Profile Deduplication & Soft Delete
+
+- **Soft Delete**: Chef and host profiles use `deletedAt` column instead of hard delete. Deleted profiles are hidden from all listings and AI discovery matching.
+- **AI Re-creation Prevention**: `findOrCreateChef` and `findOrCreateHost` check for soft-deleted profiles and skip creation if a matching deleted profile exists.
+- **Fuzzy Name Matching**: AI ingestion uses Levenshtein distance (threshold ≤ 2) to catch near-miss name spellings and reduce duplicates.
+- **Cross-Role Detection**: When creating a host, the system logs a warning if the same name exists as a chef (separate DB tables).
+- **Duplicate Detection API**: `GET /api/admin/duplicates` returns suspected duplicate groups for chefs, hosts, and cross-role matches.
+- **Host Matching in AI Discovery**: AI-discovered events now match hosts to DB records (like chefs) so updated host images appear in search results.
+- **Default Profile Images**: Generic headshot placeholder SVGs in `/public/images/` replace Unsplash stock photos for profiles without custom images.
+
 ## Recent Changes (January 2026)
 
 - **NEW**: Added "Refresh Events" button for on-demand event recuration

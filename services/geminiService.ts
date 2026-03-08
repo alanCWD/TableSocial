@@ -21,6 +21,22 @@ const fetchWithRetry = async (url: string, retries = 3, delay = 1000): Promise<R
   throw new Error('Max retries exceeded');
 };
 
+const CHEF_PLACEHOLDERS = [
+  '/images/chef-placeholder-1.svg',
+  '/images/chef-placeholder-2.svg',
+];
+
+const HOST_PLACEHOLDERS = [
+  '/images/host-placeholder-1.svg',
+  '/images/host-placeholder-2.svg',
+];
+
+const getPlaceholderImage = (name: string, type: 'chef' | 'host'): string => {
+  const placeholders = type === 'chef' ? CHEF_PLACEHOLDERS : HOST_PLACEHOLDERS;
+  const hash = name ? name.charCodeAt(0) : 0;
+  return placeholders[hash % placeholders.length];
+};
+
 const getCategoryImage = (category: string): string => {
   const categoryLower = category.toLowerCase();
   
@@ -73,7 +89,7 @@ export const fetchDiningEvents = async (location: string, force: boolean = false
           name: event.chef.name,
           bio: event.chef.bio,
           culinaryStyle: event.chef.culinaryStyle,
-          imageUrl: event.chef.imageUrl || 'https://images.unsplash.com/photo-1583394293214-28dea15ee548?auto=format&fit=crop&q=80&w=400',
+          imageUrl: event.chef.imageUrl || getPlaceholderImage(event.chef.name, 'chef'),
           pastEventsCount: event.chef.pastEventsCount,
           socialLinks: event.chef.socialLinks || {},
           verified: event.chef.verified || false,
@@ -95,7 +111,7 @@ export const fetchDiningEvents = async (location: string, force: boolean = false
           specialty: event.host.specialty || '',
           role: event.host.role || 'other',
           roleTitle: event.host.roleTitle || '',
-          imageUrl: event.host.imageUrl || 'https://images.unsplash.com/photo-1560472354-b33ff0c44a43?auto=format&fit=crop&q=80&w=400',
+          imageUrl: event.host.imageUrl || getPlaceholderImage(event.host.name, 'host'),
           socialLinks: event.host.socialLinks || {},
           pastEventsCount: event.host.pastEventsCount || 0,
           verified: event.host.verified || false,

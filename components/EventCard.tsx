@@ -2,6 +2,15 @@
 import React from 'react';
 import { DiningEvent } from '../types';
 
+const CHEF_PLACEHOLDERS = ['/images/chef-placeholder-1.svg', '/images/chef-placeholder-2.svg'];
+const HOST_PLACEHOLDERS = ['/images/host-placeholder-1.svg', '/images/host-placeholder-2.svg'];
+
+const getPlaceholder = (name: string, type: 'chef' | 'host'): string => {
+  const list = type === 'chef' ? CHEF_PLACEHOLDERS : HOST_PLACEHOLDERS;
+  const hash = name ? name.charCodeAt(0) : 0;
+  return list[hash % list.length];
+};
+
 interface EventCardProps {
   event: DiningEvent;
   onClick: (event: DiningEvent) => void;
@@ -73,13 +82,11 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
         </div>
         
         <div className="flex items-center gap-2 mb-3">
-          {event.chef?.imageUrl && (
-            <img 
-              src={event.chef.imageUrl} 
-              alt={chefName}
-              className="w-8 h-8 rounded-full object-cover border-2 border-accent/20"
-            />
-          )}
+          <img 
+            src={event.chef?.imageUrl || getPlaceholder(chefName, 'chef')} 
+            alt={chefName}
+            className="w-8 h-8 rounded-full object-cover border-2 border-accent/20"
+          />
           <div>
             <p className="text-accent font-semibold text-sm">{chefName.startsWith('Chef ') ? chefName : `Chef ${chefName}`}</p>
             {event.chef?.culinaryStyle && (
@@ -90,19 +97,11 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
         
         {hostData && hostData.name && (
           <div className="flex items-center gap-2 mb-3">
-            {hostData.imageUrl ? (
-              <img 
-                src={hostData.imageUrl} 
-                alt={hostData.name}
-                className="w-8 h-8 rounded-full object-cover border-2 border-gray-200"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center border-2 border-gray-200">
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-              </div>
-            )}
+            <img 
+              src={hostData.imageUrl || getPlaceholder(hostData.name, 'host')} 
+              alt={hostData.name}
+              className="w-8 h-8 rounded-full object-cover border-2 border-gray-200"
+            />
             <div>
               <p className="text-purple-600 font-semibold text-sm">{hostData.name}</p>
               <p className="text-gray-400 text-xs">{hostData.roleTitle || 'Pairing Specialist'}</p>

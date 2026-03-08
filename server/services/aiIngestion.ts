@@ -1,7 +1,7 @@
 import { db } from "../db.js";
 import { chefs, hosts, venues, events, type InsertChef, type InsertHost, type InsertVenue, type InsertEvent } from "../../shared/schema.js";
 import { generateSlug } from "../utils/slug.js";
-import { eq, ilike, and, or, sql } from "drizzle-orm";
+import { eq, ilike, and, or, sql, isNull, isNotNull } from "drizzle-orm";
 
 interface AiDiscoveredEvent {
   title: string;
@@ -27,7 +27,7 @@ interface AiDiscoveredEvent {
 function normalizeChefName(name: string): string {
   return name
     .trim()
-    .replace(/^chef\s+/i, '')
+    .replace(/^(chef|chef de cuisine|executive chef|head chef)\s+/i, '')
     .replace(/\s+/g, ' ')
     .toLowerCase();
 }
@@ -43,8 +43,49 @@ function normalizeVenueName(name: string): string {
 function normalizeHostName(name: string): string {
   return name
     .trim()
+    .replace(/^(dr\.?\s+|mr\.?\s+|ms\.?\s+|mrs\.?\s+)/i, '')
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+function isFuzzyMatch(a: string, b: string, threshold = 2): boolean {
+  if (a.length < 4 || b.length < 4) return false;
+  return levenshtein(a, b) <= threshold;
+}
+
+async function isDeletedProfile(name: string, table: 'chef' | 'host'): Promise<boolean> {
+  const normalized = table === 'chef' ? normalizeChefName(name) : normalizeHostName(name);
+  const tbl = table === 'chef' ? chefs : hosts;
+  const nameCol = table === 'chef' ? chefs.name : hosts.name;
+  const deletedCol = table === 'chef' ? chefs.deletedAt : hosts.deletedAt;
+
+  const deleted = await db.select({ id: tbl.id }).from(tbl).where(
+    and(
+      isNotNull(deletedCol),
+      or(
+        ilike(nameCol, name.trim()),
+        ilike(nameCol, `Chef ${normalized}`),
+        sql`LOWER(REPLACE(${nameCol}, 'Chef ', '')) = ${normalized}`
+      )
+    )
+  ).limit(1);
+
+  return deleted.length > 0;
 }
 
 function detectHostRole(roleText: string | undefined): 'sommelier' | 'mixologist' | 'whisky_ambassador' | 'wine_director' | 'beverage_director' | 'bartender' | 'other' {
@@ -59,18 +100,26 @@ function detectHostRole(roleText: string | undefined): 'sommelier' | 'mixologist
   return 'other';
 }
 
-async function findOrCreateChef(name: string, bio?: string, style?: string, region?: string): Promise<string> {
+async function findOrCreateChef(name: string, bio?: string, style?: string, region?: string): Promise<string | null> {
   const rawName = name.trim();
   const normalizedName = normalizeChefName(rawName);
-  const canonicalName = rawName.toLowerCase().startsWith('chef ') ? rawName : `Chef ${rawName.replace(/^chef\s+/i, '')}`;
+  const canonicalName = rawName.toLowerCase().startsWith('chef ') ? rawName : `Chef ${rawName.replace(/^(chef|chef de cuisine|executive chef|head chef)\s+/i, '')}`;
   const slug = generateSlug(canonicalName);
+
+  if (await isDeletedProfile(rawName, 'chef')) {
+    console.log(`Skipping deleted chef: "${rawName}"`);
+    return null;
+  }
   
   const existing = await db.select({ id: chefs.id, name: chefs.name }).from(chefs).where(
-    or(
-      eq(chefs.slug, slug),
-      ilike(chefs.name, rawName),
-      ilike(chefs.name, `Chef ${normalizedName}`),
-      sql`LOWER(REPLACE(${chefs.name}, 'Chef ', '')) = ${normalizedName}`
+    and(
+      isNull(chefs.deletedAt),
+      or(
+        eq(chefs.slug, slug),
+        ilike(chefs.name, rawName),
+        ilike(chefs.name, `Chef ${normalizedName}`),
+        sql`LOWER(REPLACE(${chefs.name}, 'Chef ', '')) = ${normalizedName}`
+      )
     )
   ).limit(1);
   
@@ -82,12 +131,24 @@ async function findOrCreateChef(name: string, bio?: string, style?: string, regi
   const nameParts = normalizedName.split(' ');
   if (nameParts.length === 1 && nameParts[0].length > 2) {
     const partialMatch = await db.select({ id: chefs.id, name: chefs.name }).from(chefs).where(
-      sql`LOWER(REPLACE(${chefs.name}, 'Chef ', '')) LIKE ${nameParts[0] + ' %'}`
+      and(
+        isNull(chefs.deletedAt),
+        sql`LOWER(REPLACE(${chefs.name}, 'Chef ', '')) LIKE ${nameParts[0] + ' %'}`
+      )
     ).limit(1);
     
     if (partialMatch.length > 0) {
       console.log(`Found partial chef match: "${rawName}" → "${partialMatch[0].name}" (first name match)`);
       return partialMatch[0].id;
+    }
+  }
+
+  const allActiveChefs = await db.select({ id: chefs.id, name: chefs.name }).from(chefs).where(isNull(chefs.deletedAt));
+  for (const chef of allActiveChefs) {
+    const dbNormalized = normalizeChefName(chef.name);
+    if (isFuzzyMatch(normalizedName, dbNormalized)) {
+      console.log(`Found fuzzy chef match: "${rawName}" → "${chef.name}" (edit distance <= 2)`);
+      return chef.id;
     }
   }
   
@@ -153,23 +214,54 @@ async function findOrCreateVenue(name: string, address?: string, city?: string, 
   return created.id;
 }
 
-async function findOrCreateHost(name: string, bio?: string, roleText?: string, region?: string): Promise<string> {
+async function findOrCreateHost(name: string, bio?: string, roleText?: string, region?: string): Promise<string | null> {
   const rawName = name.trim();
   const normalizedName = normalizeHostName(rawName);
   const slug = generateSlug(rawName);
   const role = detectHostRole(roleText);
+
+  if (await isDeletedProfile(rawName, 'host')) {
+    console.log(`Skipping deleted host: "${rawName}"`);
+    return null;
+  }
   
   const existing = await db.select({ id: hosts.id, name: hosts.name }).from(hosts).where(
-    or(
-      eq(hosts.slug, slug),
-      ilike(hosts.name, rawName),
-      sql`LOWER(${hosts.name}) = ${normalizedName}`
+    and(
+      isNull(hosts.deletedAt),
+      or(
+        eq(hosts.slug, slug),
+        ilike(hosts.name, rawName),
+        sql`LOWER(${hosts.name}) = ${normalizedName}`
+      )
     )
   ).limit(1);
   
   if (existing.length > 0) {
     console.log(`Found existing host match: "${rawName}" → "${existing[0].name}"`);
     return existing[0].id;
+  }
+
+  const allActiveHosts = await db.select({ id: hosts.id, name: hosts.name }).from(hosts).where(isNull(hosts.deletedAt));
+  for (const host of allActiveHosts) {
+    const dbNormalized = normalizeHostName(host.name);
+    if (isFuzzyMatch(normalizedName, dbNormalized)) {
+      console.log(`Found fuzzy host match: "${rawName}" → "${host.name}" (edit distance <= 2)`);
+      return host.id;
+    }
+  }
+
+  const chefMatch = await db.select({ id: chefs.id, name: chefs.name }).from(chefs).where(
+    and(
+      isNull(chefs.deletedAt),
+      or(
+        ilike(chefs.name, rawName),
+        ilike(chefs.name, `Chef ${normalizedName}`),
+        sql`LOWER(REPLACE(${chefs.name}, 'Chef ', '')) = ${normalizedName}`
+      )
+    )
+  ).limit(1);
+  if (chefMatch.length > 0) {
+    console.log(`Warning: Host "${rawName}" also exists as chef "${chefMatch[0].name}" — creating separate host profile`);
   }
   
   let uniqueSlug = slug;
@@ -217,9 +309,9 @@ export async function persistAiDiscoveries(discoveredEvents: AiDiscoveredEvent[]
   let hostsCreated = 0;
   let eventsCreated = 0;
   
-  const chefCache = new Map<string, string>();
+  const chefCache = new Map<string, string | null>();
   const venueCache = new Map<string, string>();
-  const hostCache = new Map<string, string>();
+  const hostCache = new Map<string, string | null>();
   
   for (const aiEvent of discoveredEvents) {
     try {
@@ -231,7 +323,7 @@ export async function persistAiDiscoveries(discoveredEvents: AiDiscoveredEvent[]
         const chefKey = normalizeChefName(aiEvent.chefName);
         
         if (chefCache.has(chefKey)) {
-          chefId = chefCache.get(chefKey)!;
+          chefId = chefCache.get(chefKey) ?? null;
         } else {
           const [existingCount] = await db.select({ count: sql<number>`count(*)` }).from(chefs);
           chefId = await findOrCreateChef(
@@ -269,7 +361,7 @@ export async function persistAiDiscoveries(discoveredEvents: AiDiscoveredEvent[]
         const hostKey = normalizeHostName(aiEvent.hostName);
         
         if (hostCache.has(hostKey)) {
-          hostId = hostCache.get(hostKey)!;
+          hostId = hostCache.get(hostKey) ?? null;
         } else {
           const [existingCount] = await db.select({ count: sql<number>`count(*)` }).from(hosts);
           hostId = await findOrCreateHost(
