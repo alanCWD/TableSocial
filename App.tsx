@@ -221,10 +221,13 @@ const App: React.FC = () => {
             {/* Hero Section */}
             <section className="relative min-h-[85vh] md:h-[65vh] flex items-center justify-center overflow-hidden bg-culinary py-12 md:py-0">
               <div className="absolute inset-0 z-0 scale-105">
-                <img 
-                  src="https://images.unsplash.com/photo-1543007630-9710e4a00a20?auto=format&fit=crop&q=80&w=2000" 
+                <video 
+                  src="/hero-video.mp4"
                   className="w-full h-full object-cover opacity-60 mix-blend-overlay"
-                  alt="Dining Background"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
                 />
               </div>
               
