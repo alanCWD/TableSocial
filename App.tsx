@@ -231,7 +231,7 @@ const App: React.FC = () => {
               <div className="relative z-10 w-full max-w-4xl px-6 text-center">
                 <span className="text-accent font-bold uppercase tracking-[0.3em] text-xs mb-4 block animate-in fade-in duration-1000">Exclusive Table Access</span>
                 <h1 className="text-4xl md:text-7xl text-white font-serif font-bold mb-6 md:mb-8 leading-[1.1] animate-in slide-in-from-bottom-8 duration-1000">
-                  Dine with <span className="text-accent italic">Intention</span>, Not Just Appetite.
+                  Dine with <span className="text-accent italic">Intention</span>
                 </h1>
                 <p className="text-gray-300 text-base md:text-xl mb-8 md:mb-12 font-light tracking-wide max-w-2xl mx-auto leading-relaxed animate-in slide-in-from-bottom duration-1000 delay-200">
                   Join a collective of culinary seekers at secret pop-ups and chef's tables in {search.query}.
