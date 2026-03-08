@@ -223,7 +223,7 @@ const App: React.FC = () => {
               <div className="absolute inset-0 z-0 scale-105">
                 <video 
                   src="/hero-video.mp4"
-                  poster="https://images.unsplash.com/photo-1543007630-9710e4a00a20?auto=format&fit=crop&q=80&w=2000"
+                  poster="/hero-poster.jpg"
                   className="w-full h-full object-cover opacity-60 mix-blend-overlay"
                   autoPlay
                   loop
