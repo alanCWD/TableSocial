@@ -1084,6 +1084,8 @@ Search for event listings on these ticketing platforms using terms like:
 - "${searchCity} pop-up dinner"
 - "${searchCity} multi-course dinner"
 - "${searchCity} tasting dinner"
+- "${searchCity} cooking class"
+- "${searchCity} culinary workshop"
 
 Also check Do250.com for ${searchCity} food and drink events.
 
@@ -1106,6 +1108,9 @@ WHAT TO FIND:
 - Distillery or winery collaboration dinners with restaurants
 - Pop-up dining experiences by guest chefs
 - Seasonal or holiday themed multi-course dinners
+- Cooking classes or culinary workshops taught by named chefs
+
+For cooking classes/workshops, use category "Cooking Class" and the instructor goes in chefName (hostName can be null).
 
 ${baseRules}
 
@@ -1132,6 +1137,9 @@ WHAT TO FIND (prioritize these types):
 - Multi-course culinary experiences at hotels with named chefs
 - Distillery collaboration dinners
 - Sake, beer, or cocktail pairing dinners
+- Cooking classes or culinary workshops taught by a named chef or instructor
+
+For cooking classes/workshops, use category "Cooking Class" and the instructor goes in chefName (hostName can be null).
 
 ${baseRules}
 

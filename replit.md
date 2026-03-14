@@ -211,6 +211,15 @@ AI-discovered events go through rigorous validation:
 - **Relaxed chef requirement**: Events from verified ticketing sources (Eventbrite, Showpass) or containing known culinary brand tokens (Macaloney's, Highland Park, etc.) are accepted even without a named chef, since these are verified real culinary events
 - **Canonical cache signatures**: Cache dedup uses parsed dates (ISO format) instead of raw text to prevent format-variant duplicates
 
+## Category Filtering & Cooking Classes
+
+- **Category filter buttons**: The explore page has functional filter buttons (All Experiences, Chef Pairing, Pop-up, Cooking Class) with active state styling
+- **Cooking classes hidden by default**: Cooking class events are discovered by AI but hidden from the "All Experiences" default view; they appear when the "Cooking Class" filter is selected
+- **Cooking class discovery**: AI prompts search for cooking classes/culinary workshops alongside dining events; instructors go in `chefName`, `hostName` can be null
+- **Instructor labeling**: EventCard shows "Instructor" instead of "Chef" for cooking class events; EventModal shows "Instructor" instead of "Master Chef"
+- **Two-profile standard**: Regular dining events should feature 2 profiles (chef + drink specialist/guest chef); cooking classes are the exception with 1 profile (the instructor)
+- **Filtered empty state**: When a filter has no results, a helpful message appears with a link to switch to cooking classes if available; "All Experiences" view shows a subtle count of available cooking classes
+
 ## Recent Changes (January 2026)
 
 - **NEW**: Added "Refresh Events" button for on-demand event recuration

@@ -15,6 +15,9 @@ export const EventModal: React.FC<EventModalProps> = ({ event, onClose, onViewCh
 
   if (!event) return null;
 
+  const cat = (event.category || '').toLowerCase();
+  const isCookingClass = cat.includes('cooking class') || cat.includes('culinary class') || cat.includes('culinary workshop');
+
   const handleBooking = () => {
     setIsBooked(true);
     setTimeout(() => {
@@ -87,7 +90,7 @@ export const EventModal: React.FC<EventModalProps> = ({ event, onClose, onViewCh
                       onClick={() => event.chef && onViewChef(event.chef)}
                       className="text-xs text-gray-400 uppercase font-bold tracking-widest hover:text-accent transition-colors"
                     >
-                      Master Chef
+                      {isCookingClass ? 'Instructor' : 'Master Chef'}
                     </button>
                     <p 
                       onClick={() => event.chef && onViewChef(event.chef)}

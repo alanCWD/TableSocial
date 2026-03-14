@@ -57,7 +57,7 @@ export interface DiningEvent {
   description: string;
   menuHighlights: string[];
   imageUrl: string;
-  category: 'Chef Pairing' | 'Long Table' | 'Pop-up' | 'Secret Location' | string;
+  category: 'Chef Pairing' | 'Long Table' | 'Pop-up' | 'Secret Location' | 'Cooking Class' | string;
   sourceUrl?: string;
   isAiGenerated?: boolean;
 }

@@ -70,6 +70,7 @@ const App: React.FC = () => {
   const [selectedChef, setSelectedChef] = useState<Chef | null>(null);
   const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
   const [locationInput, setLocationInput] = useState('Victoria, BC');
+  const [activeFilter, setActiveFilter] = useState('All Experiences');
   const searchCounterRef = useRef(0);
 
   useEffect(() => {
@@ -276,8 +277,16 @@ const App: React.FC = () => {
                 </div>
                 
                 <div className="flex flex-wrap gap-3 items-center">
-                  {['All Experiences', 'Chef Pairing', 'Pop-up', 'Secret Location'].map((filter) => (
-                    <button key={filter} className="px-6 py-3 rounded-xl border border-gray-100 text-xs uppercase tracking-widest font-bold text-gray-400 hover:border-accent hover:text-accent transition-all">
+                  {['All Experiences', 'Chef Pairing', 'Pop-up', 'Cooking Class'].map((filter) => (
+                    <button 
+                      key={filter} 
+                      onClick={() => setActiveFilter(filter)}
+                      className={`px-6 py-3 rounded-xl border text-xs uppercase tracking-widest font-bold transition-all ${
+                        activeFilter === filter 
+                          ? 'border-accent text-accent bg-accent/5' 
+                          : 'border-gray-100 text-gray-400 hover:border-accent hover:text-accent'
+                      }`}
+                    >
                       {filter}
                     </button>
                   ))}
@@ -315,11 +324,51 @@ const App: React.FC = () => {
                 </div>
               ) : search.results.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-                    {search.results.map((event) => (
-                      <EventCard key={event.id} event={event} onClick={setSelectedEvent} />
-                    ))}
-                  </div>
+                  {(() => {
+                    const filteredEvents = search.results.filter((event) => {
+                      const cat = (event.category || '').toLowerCase();
+                      const isCookingClass = cat.includes('cooking class') || cat.includes('culinary class') || cat.includes('culinary workshop');
+                      if (activeFilter === 'All Experiences') return !isCookingClass;
+                      if (activeFilter === 'Cooking Class') return isCookingClass;
+                      return cat.includes(activeFilter.toLowerCase());
+                    });
+                    const cookingClassCount = search.results.filter((event) => {
+                      const cat = (event.category || '').toLowerCase();
+                      return cat.includes('cooking class') || cat.includes('culinary class') || cat.includes('culinary workshop');
+                    }).length;
+                    return (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+                          {filteredEvents.map((event) => (
+                            <EventCard key={event.id} event={event} onClick={setSelectedEvent} />
+                          ))}
+                        </div>
+                        {filteredEvents.length === 0 && (
+                          <div className="text-center py-16">
+                            <p className="text-gray-400 font-light text-lg">No {activeFilter.toLowerCase()} events found in {search.query}.</p>
+                            {activeFilter !== 'Cooking Class' && cookingClassCount > 0 && (
+                              <button 
+                                onClick={() => setActiveFilter('Cooking Class')}
+                                className="mt-4 text-accent hover:underline font-medium"
+                              >
+                                View {cookingClassCount} cooking {cookingClassCount === 1 ? 'class' : 'classes'} instead
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {activeFilter === 'All Experiences' && cookingClassCount > 0 && filteredEvents.length > 0 && (
+                          <div className="mt-8 text-center">
+                            <button 
+                              onClick={() => setActiveFilter('Cooking Class')}
+                              className="text-sm text-gray-400 hover:text-accent transition-colors"
+                            >
+                              + {cookingClassCount} cooking {cookingClassCount === 1 ? 'class' : 'classes'} also available
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {featuredChefs.length > 0 && (
                     <div className="mt-32">

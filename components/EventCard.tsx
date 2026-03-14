@@ -28,6 +28,8 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
   const venueAddress = event.venue?.fullAddress || "";
   const isAi = (event as any).isAiGenerated;
   const sourceUrl = (event as any).sourceUrl || ((event as any).sourceUrls?.[0]);
+  const cat = (event.category || '').toLowerCase();
+  const isCookingClass = cat.includes('cooking class') || cat.includes('culinary class') || cat.includes('culinary workshop');
   
   const getSourceLabel = (url: string) => {
     try {
@@ -88,10 +90,17 @@ export const EventCard: React.FC<EventCardProps> = ({ event, onClick }) => {
             className="w-8 h-8 rounded-full object-cover border-2 border-accent/20"
           />
           <div>
-            <p className="text-accent font-semibold text-sm">{chefName.startsWith('Chef ') ? chefName : `Chef ${chefName}`}</p>
-            {event.chef?.culinaryStyle && (
+            <p className="text-accent font-semibold text-sm">
+              {isCookingClass 
+                ? chefName 
+                : (chefName.startsWith('Chef ') ? chefName : `Chef ${chefName}`)
+              }
+            </p>
+            {isCookingClass ? (
+              <p className="text-gray-400 text-xs">Instructor</p>
+            ) : event.chef?.culinaryStyle ? (
               <p className="text-gray-400 text-xs">{event.chef.culinaryStyle}</p>
-            )}
+            ) : null}
           </div>
         </div>
         

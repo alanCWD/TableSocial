@@ -55,6 +55,9 @@ const getCategoryImage = (category: string): string => {
   if (categoryLower.includes('cocktail') || categoryLower.includes('mixology')) {
     return 'https://images.unsplash.com/photo-1536935338788-846e38e87d23?auto=format&fit=crop&q=80&w=800';
   }
+  if (categoryLower.includes('cooking class') || categoryLower.includes('culinary class') || categoryLower.includes('culinary workshop')) {
+    return 'https://images.unsplash.com/photo-1556910103-1c02745aae4d?auto=format&fit=crop&q=80&w=800';
+  }
   return 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&q=80&w=800';
 };
 
