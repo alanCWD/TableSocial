@@ -177,6 +177,24 @@ function isClosedVenue(venueName: string | null): boolean {
   });
 }
 
+function canonicalCacheSignature(title: string | null, date: string | null): string {
+  const t = (title || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  let d = "";
+  if (date) {
+    try {
+      const parsed = new Date(date);
+      if (!isNaN(parsed.getTime())) {
+        d = parsed.toISOString().slice(0, 10);
+      } else {
+        d = date.toLowerCase().replace(/[^a-z0-9]/g, "");
+      }
+    } catch {
+      d = date.toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+  }
+  return `${t}-${d}`;
+}
+
 /**
  * Check if title is invalid (likely a parsing error)
  */
@@ -860,20 +878,32 @@ export function registerApiRoutes(app: Express): void {
 
       let cachedEvents: any[] = [];
       try {
-        cachedEvents = await db
+        const rawCached = await db
           .select()
           .from(cachedAiEvents)
           .where(eq(cachedAiEvents.location, normalizedLocation));
         
-        const futureOnlyCached = cachedEvents.filter(ev => {
+        const futureOnlyCached = rawCached.filter(ev => {
           if (!ev.date) return false;
           try {
             const eventDate = new Date(ev.date);
             return !isNaN(eventDate.getTime()) && eventDate >= today;
           } catch { return true; }
         });
-        cachedEvents = futureOnlyCached;
-        console.log(`Found ${cachedEvents.length} cached events for ${location}`);
+        
+        const freshCached = futureOnlyCached.filter(ev => {
+          if (!ev.expiresAt) return true;
+          return new Date(ev.expiresAt) > today;
+        });
+        
+        const seenSignatures = new Set<string>();
+        cachedEvents = freshCached.filter(ev => {
+          const sig = canonicalCacheSignature(ev.title, ev.date);
+          if (seenSignatures.has(sig)) return false;
+          seenSignatures.add(sig);
+          return true;
+        });
+        console.log(`Found ${cachedEvents.length} unique cached events for ${location} (${rawCached.length} raw, ${freshCached.length} fresh+future)`);
       } catch (cacheError) {
         console.error("Cache read error:", cacheError);
       }
@@ -888,47 +918,8 @@ export function registerApiRoutes(app: Express): void {
         const currentDateStr = today.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         
         const searchCity = location.split(",")[0].trim();
-        
-        const prompt = `Today's date is ${currentDateStr}. Search the web for UPCOMING intimate dining experiences in ${location}.
 
-SEARCH THESE TYPES OF SOURCES:
-- Local catering companies with event pages (e.g., hobfinefoods.ca/long-table-events)
-- Showpass, Eventbrite, Do250.com event listings for ${searchCity}
-- Hotel restaurant event calendars (Hotel Grand Pacific, Fairmont Empress, Chateau Victoria)
-- Winery and distillery dinner event pages
-- Local chef and culinary pop-up Instagram/websites
-
-WHAT TO FIND (prioritize these types):
-- "Long Table Dinners" by named chefs like Chef Castro, Chef Rob
-- Whisky dinners with named ambassadors (e.g., "InchDairnie Whisky Dinner")
-- Wine pairing dinners with named sommeliers
-- Chef's tables hosted by specific named chefs
-- Pop-up dinners by named guest chefs
-- Multi-course culinary experiences at hotels with named chefs
-
-WHAT TO EXCLUDE:
-- Large food festivals (over 50 attendees)
-- Events with only generic hosts like "Guest Chefs" or "Various Restaurants"
-- General restaurant promotions or "Dine Around" city-wide events
-- Food tours or walking tours
-- Events without specific dates
-- Events NOT in ${searchCity} or its immediate area
-
-CRITICAL REQUIREMENTS:
-- Only events happening AFTER ${currentDateStr}
-- Must have a SPECIFIC DATE (e.g., "January 16, 2026" - NOT "ongoing", "seasonal", or date ranges)
-- Must be located IN or NEAR ${searchCity} (not in other cities)
-- Must have a real venue with full street address
-- Must have a verifiable source URL
-
-IMPORTANT - DISTINGUISH BETWEEN CHEF AND HOST:
-- "chefName" = the person COOKING the food (e.g., "Landon Crawford" who prepares the menu)
-- "hostName" = the person PRESENTING/HOSTING (e.g., "Adam Ellesmere" whisky ambassador, "Scott Fraser" distillery rep)
-- For whisky dinners: the chef cooks, the whisky ambassador hosts
-- For wine dinners: the chef cooks, the sommelier hosts
-- If same person does both, put their name in both fields
-
-Return a JSON array of 3-5 FUTURE events. Each event object must have these fields:
+        const baseEventSchema = `Each event object must have these fields:
 {
   "title": "Event name",
   "description": "2-3 sentences about the experience",
@@ -948,66 +939,182 @@ Return a JSON array of 3-5 FUTURE events. Each event object must have these fiel
   "venueCity": "${searchCity}",
   "venueDescription": "Brief venue description",
   "menuHighlights": ["Course 1", "Course 2", "Pairing notes"]
-}
+}`;
 
-Important:
+        const baseRules = `CRITICAL REQUIREMENTS:
+- Only events happening AFTER ${currentDateStr}
+- Must have a SPECIFIC DATE (e.g., "January 16, 2026" - NOT "ongoing", "seasonal", or date ranges)
+- Must be located IN or NEAR ${searchCity} (not in other cities)
+- Must have a real venue with full street address
+- Must have a verifiable source URL
 - chefName MUST be a real chef's name (first + last name) who is COOKING
 - hostName is the presenter/ambassador (can be null if chef is also the host)
 - venueCity MUST be "${searchCity}" or very nearby - exclude events in other cities
-- Return valid JSON only, no markdown`;
+- Return valid JSON only, no markdown
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.0-flash",
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-          },
-        });
+IMPORTANT - DISTINGUISH BETWEEN CHEF AND HOST:
+- "chefName" = the person COOKING the food (e.g., "Landon Crawford" who prepares the menu)
+- "hostName" = the person PRESENTING/HOSTING (e.g., "Adam Ellesmere" whisky ambassador, "Scott Fraser" distillery rep)
+- For whisky dinners: the chef cooks, the whisky ambassador hosts
+- For wine dinners: the chef cooks, the sommelier hosts
+- If same person does both, put their name in both fields
 
-        let rawText = response.text || "[]";
-        console.log("Raw Gemini response text (first 2000 chars):", rawText.substring(0, 2000));
-        
-        const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (jsonMatch) {
-          rawText = jsonMatch[1].trim();
-        }
-        
-        rawText = rawText.replace(/[\x00-\x1F\x7F]/g, ' ');
-        
-        let aiEvents: any[] = [];
-        try {
-          aiEvents = JSON.parse(rawText);
-        } catch (parseError) {
-          console.log("Initial JSON parse failed, attempting to fix...", parseError);
-          let fixedText = rawText
-            .replace(/,\s*]/g, ']')
-            .replace(/,\s*}/g, '}')
-            .replace(/([^\\])\\([^"\\\/bfnrtu])/g, '$1\\\\$2');
-          
-          const lastBracket = fixedText.lastIndexOf(']');
-          if (lastBracket > 0) {
-            fixedText = fixedText.substring(0, lastBracket + 1);
-          }
-          
-          try {
-            aiEvents = JSON.parse(fixedText);
-          } catch (secondError) {
-            console.log("JSON parsing failed after fixes, returning empty array");
-            aiEvents = [];
-          }
-        }
-        
-        const sources: { title: string; uri: string }[] = [];
-        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (chunks) {
-          chunks.forEach((chunk: any) => {
-            if (chunk.web) {
-              sources.push({ title: chunk.web.title || "Reference", uri: chunk.web.uri });
+WHAT TO EXCLUDE:
+- Large food festivals (over 50 attendees)
+- Events with only generic hosts like "Guest Chefs" or "Various Restaurants"
+- General restaurant promotions or "Dine Around" city-wide events
+- Food tours or walking tours
+- Events without specific dates
+- Events NOT in ${searchCity} or its immediate area`;
+
+        const searchPrompts = [
+          `Today's date is ${currentDateStr}. Search Eventbrite.ca, Eventbrite.com, and Showpass.com specifically for UPCOMING intimate dining events, food pairing dinners, whisky tastings with dinner, wine pairing dinners, and chef's table experiences in ${location}.
+
+Search for event listings on these ticketing platforms using terms like:
+- "${searchCity} dinner pairing"
+- "${searchCity} whisky dinner"
+- "${searchCity} wine dinner"  
+- "${searchCity} chef table"
+- "${searchCity} distillery dinner"
+- "${searchCity} pop-up dinner"
+- "${searchCity} multi-course dinner"
+- "${searchCity} tasting dinner"
+
+Also check Do250.com for ${searchCity} food and drink events.
+
+${baseRules}
+
+Return a JSON array of up to 10 FUTURE events found on these ticketing platforms. ${baseEventSchema}`,
+
+          `Today's date is ${currentDateStr}. Search the web for UPCOMING intimate dining experiences in ${location} from these specific source types:
+
+SEARCH THESE SOURCES:
+- Hotel restaurant event calendars (Hotel Grand Pacific, Fairmont Empress, Chateau Victoria, Delta Hotels)
+- Winery and distillery dinner/pairing event pages in and around ${searchCity}
+- Local catering companies with event pages (e.g., hobfinefoods.ca)
+- Restaurant websites in ${searchCity} that host special multi-course events
+- Brewery and distillery tasting room event calendars near ${searchCity}
+
+WHAT TO FIND:
+- Multi-course pairing dinners (whisky, wine, beer, spirits)
+- Chef's tables and special chef-hosted dinners
+- Distillery or winery collaboration dinners with restaurants
+- Pop-up dining experiences by guest chefs
+- Seasonal or holiday themed multi-course dinners
+
+${baseRules}
+
+Return a JSON array of up to 10 FUTURE events. ${baseEventSchema}`,
+
+          `Today's date is ${currentDateStr}. Search the web broadly for ALL upcoming intimate culinary events in ${location}.
+
+SEARCH THESE TYPES OF SOURCES:
+- Local catering companies with event pages (e.g., hobfinefoods.ca/long-table-events)
+- Showpass, Eventbrite, Do250.com event listings for ${searchCity}
+- Hotel restaurant event calendars (Hotel Grand Pacific, Fairmont Empress, Chateau Victoria)
+- Winery and distillery dinner event pages
+- Local chef and culinary pop-up Instagram/websites
+- Tourism ${searchCity} event calendars
+- Local food blogs and event aggregator sites
+- Restaurant Instagram/Facebook pages with upcoming events
+
+WHAT TO FIND (prioritize these types):
+- "Long Table Dinners" by named chefs
+- Whisky dinners with named ambassadors (e.g., "InchDairnie Whisky Dinner")
+- Wine pairing dinners with named sommeliers
+- Chef's tables hosted by specific named chefs
+- Pop-up dinners by named guest chefs
+- Multi-course culinary experiences at hotels with named chefs
+- Distillery collaboration dinners
+- Sake, beer, or cocktail pairing dinners
+
+${baseRules}
+
+Return a JSON array of up to 10 FUTURE events. ${baseEventSchema}`
+        ];
+
+        let allAiEvents: any[] = [];
+        const allSources: { title: string; uri: string }[] = [];
+
+        console.log(`Starting multi-pass AI discovery (${searchPrompts.length} passes) for ${location}`);
+
+        const searchResults = await Promise.allSettled(
+          searchPrompts.map(async (prompt, passIndex) => {
+            try {
+              const response = await ai.models.generateContent({
+                model: "gemini-2.0-flash",
+                contents: prompt,
+                config: {
+                  tools: [{ googleSearch: {} }],
+                },
+              });
+
+              let rawText = response.text || "[]";
+              console.log(`Pass ${passIndex + 1} raw response (first 1000 chars):`, rawText.substring(0, 1000));
+
+              const jsonMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
+              if (jsonMatch) {
+                rawText = jsonMatch[1].trim();
+              }
+
+              rawText = rawText.replace(/[\x00-\x1F\x7F]/g, ' ');
+
+              let passEvents: any[] = [];
+              try {
+                passEvents = JSON.parse(rawText);
+              } catch (parseError) {
+                let fixedText = rawText
+                  .replace(/,\s*]/g, ']')
+                  .replace(/,\s*}/g, '}')
+                  .replace(/([^\\])\\([^"\\\/bfnrtu])/g, '$1\\\\$2');
+
+                const lastBracket = fixedText.lastIndexOf(']');
+                if (lastBracket > 0) {
+                  fixedText = fixedText.substring(0, lastBracket + 1);
+                }
+
+                try {
+                  passEvents = JSON.parse(fixedText);
+                } catch {
+                  console.log(`Pass ${passIndex + 1}: JSON parsing failed`);
+                  passEvents = [];
+                }
+              }
+
+              if (!Array.isArray(passEvents)) passEvents = [];
+
+              const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+              const passSources: { title: string; uri: string }[] = [];
+              if (chunks) {
+                chunks.forEach((chunk: any) => {
+                  if (chunk.web) {
+                    passSources.push({ title: chunk.web.title || "Reference", uri: chunk.web.uri });
+                  }
+                });
+              }
+
+              console.log(`Pass ${passIndex + 1}: found ${passEvents.length} events, ${passSources.length} sources`);
+              return { events: passEvents, sources: passSources };
+            } catch (passError) {
+              console.error(`Pass ${passIndex + 1} failed:`, passError);
+              return { events: [], sources: [] };
             }
-          });
+          })
+        );
+
+        for (const result of searchResults) {
+          if (result.status === 'fulfilled') {
+            allAiEvents.push(...result.value.events);
+            allSources.push(...result.value.sources);
+          }
         }
 
-        console.log("Raw Gemini AI events:", JSON.stringify(aiEvents, null, 2));
+        console.log(`Multi-pass discovery total: ${allAiEvents.length} raw events from ${searchPrompts.length} passes`);
+
+        const sources = allSources;
+        const aiEvents = allAiEvents;
+
+        console.log("Raw Gemini AI events:", JSON.stringify(aiEvents.map(e => e.title), null, 2));
         
         const validAiEvents = aiEvents.filter((ev: any) => {
           const hasTitle = ev.title && ev.title.trim() !== "";
@@ -1062,7 +1169,6 @@ Important:
             } catch (e) {}
           }
           
-          // Check if venue is known to be closed
           const venueIsClosed = isClosedVenue(ev.venueName);
           if (venueIsClosed) {
             console.log(`Filtering out AI event: "${ev.title}" - venue "${ev.venueName}" is known to be closed`);
@@ -1080,7 +1186,19 @@ Important:
 
         const expiresAt = new Date(today.getTime() + CACHE_HOURS * 60 * 60 * 1000);
         
+        const existingCacheSignatures = new Set(
+          cachedEvents.map(ev => canonicalCacheSignature(ev.title, ev.date))
+        );
+        
+        let newCachedCount = 0;
         for (const ev of validAiEvents) {
+          const cacheSignature = canonicalCacheSignature(ev.title, ev.date);
+          
+          if (existingCacheSignatures.has(cacheSignature)) {
+            continue;
+          }
+          existingCacheSignatures.add(cacheSignature);
+          
           try {
             await db.insert(cachedAiEvents).values({
               location: normalizedLocation,
@@ -1104,13 +1222,14 @@ Important:
               menuHighlights: ev.menuHighlights || [],
               expiresAt,
             });
+            newCachedCount++;
           } catch (cacheError) {
             console.error("Failed to cache AI event:", cacheError);
           }
         }
         
-        if (validAiEvents.length > 0) {
-          console.log(`Cached ${validAiEvents.length} AI events for ${location}, expires at ${expiresAt.toISOString()}`);
+        if (newCachedCount > 0) {
+          console.log(`Cached ${newCachedCount} NEW AI events for ${location} (skipped ${validAiEvents.length - newCachedCount} duplicates), expires at ${expiresAt.toISOString()}`);
         }
 
         const allDbChefs = await db.select().from(chefs).where(isNull(chefs.deletedAt));
@@ -1320,11 +1439,11 @@ Important:
           console.error("Instagram async discovery error:", err);
         });
 
-        const allAiEvents = [...enhancedFreshEvents, ...validCachedEvents];
+        const combinedAiEvents = [...enhancedFreshEvents, ...validCachedEvents];
         
         // Use smart deduplication with brand/venue/date matching
-        console.log(`Before smart deduplication: ${allAiEvents.length} AI events`);
-        const uniqueAiEvents = deduplicateEvents(allAiEvents);
+        console.log(`Before smart deduplication: ${combinedAiEvents.length} AI events`);
+        const uniqueAiEvents = deduplicateEvents(combinedAiEvents);
         console.log(`After smart deduplication: ${uniqueAiEvents.length} unique AI events`);
 
         // Auto-persist discovered chefs, venues, and events to database

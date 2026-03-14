@@ -37,11 +37,13 @@ TableSocial helps users discover unique private dining events, chef's tables, an
 The `/api/discover` endpoint uses Gemini AI with Google Search grounding to find real events:
 
 1. Database events are prioritized (if >= 3 exist, AI is skipped)
-2. Cached AI events are loaded from the database
-3. Gemini searches the web for new dining events from sources like:
-   - Local catering companies (hobfinefoods.ca, etc.)
-   - Event platforms (Showpass, Eventbrite, Do250)
-   - Hotel restaurant event calendars
+2. Cached AI events are loaded from the database (deduplicated at read time by title+date signature)
+3. **Multi-pass AI discovery** runs 3 parallel Gemini searches with different prompt angles:
+   - **Pass 1 (Ticketing platforms)**: Searches Eventbrite.ca, Eventbrite.com, Showpass, Do250 specifically
+   - **Pass 2 (Venue/restaurant)**: Searches hotel event calendars, winery/distillery pages, catering companies
+   - **Pass 3 (Broad search)**: Searches all source types including tourism calendars, food blogs, social media
+   - Each pass requests up to 10 events (vs. 3-5 previously)
+   - All 3 passes run in parallel via `Promise.allSettled` for speed
 4. Events are validated to require:
    - Named chef (first + last name, who cooks the food)
    - Named host (whisky ambassador, sommelier, if different from chef)
@@ -49,8 +51,8 @@ The `/api/discover` endpoint uses Gemini AI with Google Search grounding to find
    - Source URL for verification
    - Specific future date
    - Venue not on closed venues list (e.g., OLO restaurant)
-5. Valid events are cached and accumulated across searches
-6. Smart deduplication merges duplicate events
+5. Valid events are cached with **deduplication before insert** (skips events already in cache by title+date)
+6. Smart deduplication merges duplicate events across all passes
 7. Results are sorted chronologically (earliest first)
 
 ## Smart Event Deduplication
