@@ -28,6 +28,97 @@ const CLOSED_VENUES = [
   "olo victoria",
 ];
 
+const VICTORIA_AREA_CITIES = [
+  "victoria", "langford", "colwood", "esquimalt", "saanich",
+  "oak bay", "sidney", "sooke", "metchosin", "view royal",
+  "central saanich", "north saanich", "highlands", "brentwood bay",
+];
+
+function isHighAuthoritySource(url: string | null): boolean {
+  if (!url) return false;
+  const urlLower = url.toLowerCase();
+  return urlLower.includes('eventbrite') ||
+         urlLower.includes('showpass.com') ||
+         urlLower.includes('do250.com');
+}
+
+function hasCulinaryBrandToken(title: string): boolean {
+  if (!title) return false;
+  const normalized = title.toLowerCase()
+    .replace(/&amp;/g, '&')
+    .replace(/['']s/g, 's')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return BRAND_TOKENS.some(brand => {
+    const pattern = new RegExp(`\\b${brand.replace(/\s+/g, '\\s+')}\\b`);
+    return pattern.test(normalized);
+  });
+}
+
+const NON_CULINARY_KEYWORDS = [
+  "baseball", "softball", "hockey", "soccer", "football", "basketball",
+  "music bingo", "paint night", "trivia night", "karaoke",
+  "concert", "live music", "live!", "comedy show", "stand-up",
+  "fundraiser", "auction", "gala",
+  "yoga", "fitness", "run ", "marathon", "5k", "10k",
+  "highland games", "picklefest", "pickle fest",
+  "craft fair", "market day", "swap meet",
+  "open house", "wedding",
+  "free spirit", "non-alc festival", "non-alcoholic festival",
+  "happy hour", "kid cuisine crawl",
+];
+
+function isNonCulinaryEvent(title: string, category: string): boolean {
+  const combined = `${title} ${category}`.toLowerCase()
+    .replace(/&amp;/g, '&');
+  return NON_CULINARY_KEYWORDS.some(kw => combined.includes(kw));
+}
+
+function isAddressInSearchRegion(address: string, venueCity: string, searchCity: string): boolean {
+  const searchCityLower = searchCity.toLowerCase();
+  const addressLower = (address || "").toLowerCase();
+  const venueCityLower = (venueCity || "").toLowerCase();
+
+  if (searchCityLower === "victoria") {
+    const combinedText = `${addressLower} ${venueCityLower}`;
+
+    const nonLocalIndicators = [
+      "ontario", "niagara", "toronto", "ottawa", "hamilton", "london, on",
+      "alberta", "calgary", "edmonton",
+      "saskatchewan", "manitoba", "winnipeg",
+      "quebec", "montreal", "nova scotia", "new brunswick",
+      "united states", "usa", ", wa ", ", or ", ", ca ", ", co ",
+      "steamboat", "seattle", "portland", "san francisco",
+      "lake country", "sun peaks", "kamloops", "kelowna", "penticton",
+      "vernon", "revelstoke", "whistler", "squamish",
+      "nanaimo", "courtenay", "comox", "campbell river", "parksville",
+      "qualicum", "port alberni", "tofino", "ucluelet", "duncan",
+      "prince george", "cranbrook", "nelson", "trail",
+      "vancouver, bc", "burnaby", "surrey", "richmond, bc", "coquitlam",
+      "new westminster", "abbotsford", "chilliwack",
+    ];
+    if (nonLocalIndicators.some(ind => combinedText.includes(ind))) {
+      return false;
+    }
+
+    const addressNotSpecified = addressLower.includes("not available") ||
+                                 addressLower.includes("not provided") ||
+                                 addressLower.includes("not found") ||
+                                 addressLower.includes("not specified") ||
+                                 addressLower.includes("check website") ||
+                                 addressLower.includes("unknown");
+    if (addressNotSpecified) {
+      return VICTORIA_AREA_CITIES.some(c => venueCityLower.includes(c));
+    }
+
+    return VICTORIA_AREA_CITIES.some(c => combinedText.includes(c));
+  }
+
+  return venueCityLower.includes(searchCityLower) ||
+         addressLower.includes(searchCityLower);
+}
+
 // Known brand/product names that identify events (whisky brands, chef names, etc.)
 const BRAND_TOKENS = [
   "highland park", "inchdairnie", "bearface", "macaloney", "macaloneys",
@@ -840,7 +931,7 @@ export function registerApiRoutes(app: Express): void {
           return locationMatch && isEventInFuture(event.date);
         });
         
-        eventsWithRelations = await Promise.all(
+        const allEventsWithRelations = await Promise.all(
           locationFilteredEvents.map(async (event) => {
             const chef = event.chefId
               ? (await db.select().from(chefs).where(eq(chefs.id, event.chefId)))[0]
@@ -855,7 +946,17 @@ export function registerApiRoutes(app: Express): void {
           })
         );
         
-        console.log(`Found ${eventsWithRelations.length} future published events for ${searchCityLower}`);
+        eventsWithRelations = allEventsWithRelations.filter(ev => {
+          const venueAddress = ev.venue?.fullAddress || "";
+          const venueCity = ev.venue?.city || ev.location || "";
+          if (venueAddress && !isAddressInSearchRegion(venueAddress, venueCity, searchCityLower)) {
+            console.log(`Filtering out DB event: "${ev.title}" - venue address "${venueAddress}" is not in ${searchCityLower} area`);
+            return false;
+          }
+          return true;
+        });
+        
+        console.log(`Found ${eventsWithRelations.length} future published events for ${searchCityLower} (${allEventsWithRelations.length} before venue check)`);
       } catch (dbError) {
         console.error("Database error in discover:", dbError);
       }
@@ -896,14 +997,18 @@ export function registerApiRoutes(app: Express): void {
           return new Date(ev.expiresAt) > today;
         });
         
+        const locationValidCached = freshCached.filter(ev => {
+          return isAddressInSearchRegion(ev.venueAddress || "", ev.venueCity || "", searchCityLower);
+        });
+        
         const seenSignatures = new Set<string>();
-        cachedEvents = freshCached.filter(ev => {
+        cachedEvents = locationValidCached.filter(ev => {
           const sig = canonicalCacheSignature(ev.title, ev.date);
           if (seenSignatures.has(sig)) return false;
           seenSignatures.add(sig);
           return true;
         });
-        console.log(`Found ${cachedEvents.length} unique cached events for ${location} (${rawCached.length} raw, ${freshCached.length} fresh+future)`);
+        console.log(`Found ${cachedEvents.length} unique cached events for ${location} (${rawCached.length} raw, ${locationValidCached.length} location-valid, ${freshCached.length} fresh+future)`);
       } catch (cacheError) {
         console.error("Cache read error:", cacheError);
       }
@@ -1132,6 +1237,10 @@ Return a JSON array of up to 10 FUTURE events. ${baseEventSchema}`
                                 !chefName.includes(" ");
           const hasNamedChef = !isGenericChef && chefName.length > 3;
           
+          const hasVerifiedSource = isHighAuthoritySource(ev.sourceUrl);
+          const hasBrandInTitle = hasCulinaryBrandToken(ev.title);
+          const chefRequirementMet = hasNamedChef || hasVerifiedSource || hasBrandInTitle;
+          
           const hasRealVenue = ev.venueName && ev.venueName.trim() !== "" && 
                                ev.venueName.toLowerCase() !== "various" &&
                                ev.venueName.toLowerCase() !== "various restaurants";
@@ -1141,10 +1250,7 @@ Return a JSON array of up to 10 FUTURE events. ${baseEventSchema}`
                                   ev.venueAddress.toLowerCase() !== "various addresses";
           const hasSourceUrl = ev.sourceUrl && ev.sourceUrl.trim() !== "";
           
-          const venueCity = (ev.venueCity || "").toLowerCase().trim();
-          const addressLower = (ev.venueAddress || "").toLowerCase();
-          const isInSearchCity = venueCity.includes(searchCity.toLowerCase()) ||
-                                 addressLower.includes(searchCity.toLowerCase());
+          const isInSearchCity = isAddressInSearchRegion(ev.venueAddress || "", ev.venueCity || "", searchCity);
           
           const invalidDatePatterns = [
             "varies", "various", "ongoing", "seasonal", "tbd", "to be announced",
@@ -1175,8 +1281,13 @@ Return a JSON array of up to 10 FUTURE events. ${baseEventSchema}`
             return false;
           }
           
-          if (!hasTitle || !hasNamedChef || !hasRealVenue || !hasVenueAddress || !hasSourceUrl || !hasSpecificDate || !isInSearchCity) {
-            console.log(`Filtering out AI event: "${ev.title}" - missing: chef=${!hasNamedChef}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}, date=${!hasSpecificDate}, location=${!isInSearchCity}`);
+          if (isNonCulinaryEvent(ev.title, ev.category || "")) {
+            console.log(`Filtering out non-culinary AI event: "${ev.title}"`);
+            return false;
+          }
+          
+          if (!hasTitle || !chefRequirementMet || !hasRealVenue || !hasVenueAddress || !hasSourceUrl || !hasSpecificDate || !isInSearchCity) {
+            console.log(`Filtering out AI event: "${ev.title}" - missing: chef=${!chefRequirementMet}${(hasVerifiedSource || hasBrandInTitle) && !hasNamedChef ? '(relaxed)' : ''}, venue=${!hasRealVenue}, address=${!hasVenueAddress}, source=${!hasSourceUrl}, date=${!hasSpecificDate}, location=${!isInSearchCity}${!isInSearchCity ? ` [addr: ${(ev.venueAddress || '').substring(0, 60)}]` : ''}`);
             return false;
           }
           return isFutureEvent;
@@ -1410,7 +1521,11 @@ Return a JSON array of up to 10 FUTURE events. ${baseEventSchema}`
         });
 
         // Filter out closed venues from cached events too
-        const validCachedEvents = enhancedCachedEvents.filter((ev: any) => !isClosedVenue(ev.venue?.name));
+        const validCachedEvents = enhancedCachedEvents.filter((ev: any) => {
+          if (isClosedVenue(ev.venue?.name)) return false;
+          if (isNonCulinaryEvent(ev.title, ev.category || "")) return false;
+          return true;
+        });
         
         // Trigger Instagram discovery asynchronously (doesn't block response)
         // Results will be persisted to database for future requests

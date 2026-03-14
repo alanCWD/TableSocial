@@ -201,6 +201,16 @@ Users can refresh event discovery at any time using the "Refresh Events" button:
 - **Host Matching in AI Discovery**: AI-discovered events now match hosts to DB records (like chefs) so updated host images appear in search results.
 - **Default Profile Images**: Generic headshot placeholder SVGs in `/public/images/` replace Unsplash stock photos for profiles without custom images.
 
+## Location & Content Validation
+
+AI-discovered events go through rigorous validation:
+
+- **Address-based location filtering**: Instead of trusting Gemini's `venueCity` field, the system cross-checks the actual venue address against known Victoria-area cities (Victoria, Langford, Colwood, Esquimalt, Saanich, Oak Bay, Sidney, Sooke, etc.) and a blocklist of non-local locations (Ontario cities, other BC regions like Comox/Courtenay/Kelowna, US locations)
+- **DB event venue validation**: Published database events are also filtered by actual venue address, catching AI-ingested events with incorrect location metadata (e.g., Crown Isle Resort in Courtenay)
+- **Non-culinary event filter**: Events with titles matching non-culinary keywords (baseball, concerts, fundraisers, paint nights, etc.) are automatically rejected
+- **Relaxed chef requirement**: Events from verified ticketing sources (Eventbrite, Showpass) or containing known culinary brand tokens (Macaloney's, Highland Park, etc.) are accepted even without a named chef, since these are verified real culinary events
+- **Canonical cache signatures**: Cache dedup uses parsed dates (ISO format) instead of raw text to prevent format-variant duplicates
+
 ## Recent Changes (January 2026)
 
 - **NEW**: Added "Refresh Events" button for on-demand event recuration
