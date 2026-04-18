@@ -1,20 +1,20 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# TableSocial
 
-# Run and deploy your AI Studio app
-
-This contains everything you need to run your app locally.
-
-View your app in AI Studio: https://ai.studio/apps/drive/1MXJCg-xRyN8MeJs8G8ACQynIWxbYCpTu
+A private dining discovery platform for Victoria, BC. Uses Google Gemini AI with web search grounding to find real culinary events (chef's tables, whisky dinners, wine pairings, pop-up dinners).
 
 ## Run Locally
 
-**Prerequisites:**  Node.js
+**Prerequisites:** Node.js
 
+1. Install dependencies: `npm install`
+2. Set required secrets in Replit's Secrets panel (or as environment variables):
+   - `GEMINI_API_KEY` — Google Gemini API key for event discovery
+   - `SESSION_SECRET` — Random string for session security
+   - `DATABASE_URL` — PostgreSQL connection string
+3. Run the app: `npm run dev`
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+## Security Notes
+
+- All API keys must be stored in Replit Secrets (or server-side environment variables), never in source code or committed files
+- The Gemini API is called server-side only; the key is never exposed to the browser
+- Never commit `.env`, `.env.local`, or any file containing real credentials
