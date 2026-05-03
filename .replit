@@ -7,28 +7,6 @@ integrations = ["javascript_database:1.0.0", "javascript_log_in_with_replit:2.0.
 channel = "stable-25_05"
 
 [workflows]
-runButton = "Project"
-
-[[workflows.workflow]]
-name = "Project"
-mode = "parallel"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
-args = "Start application"
-
-[[workflows.workflow]]
-name = "Start application"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "webview"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npm run dev"
-waitForPort = 5000
 
 [[ports]]
 localPort = 3001
@@ -52,3 +30,7 @@ deploymentTarget = "autoscale"
 build = ["npm", "run", "build"]
 publicDir = "dist"
 run = ["npm", "run", "start"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
